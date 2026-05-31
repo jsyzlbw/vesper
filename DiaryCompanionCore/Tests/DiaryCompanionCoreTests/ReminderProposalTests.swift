@@ -12,30 +12,35 @@ import Testing
 
 @Test func validatesBiweeklyMondayReminderProposal() throws {
     try makeProposal(
+        start: makeDate(year: 2026, month: 6, day: 1),
         recurrence: .weekly(interval: 2, weekdays: [.monday], end: nil)
     ).validate()
 }
 
 @Test func validatesMonthlyReminderProposal() throws {
     try makeProposal(
+        start: makeDate(year: 2026, month: 6, day: 15),
         recurrence: .monthly(interval: 1, day: 15, end: nil)
     ).validate()
 }
 
 @Test func validatesMonthlyLastDayReminderProposal() throws {
     try makeProposal(
+        start: makeDate(year: 2026, month: 6, day: 30),
         recurrence: .monthlyLastDay(interval: 1, end: nil)
     ).validate()
 }
 
 @Test func validatesYearlyReminderProposal() throws {
     try makeProposal(
+        start: makeDate(year: 2026, month: 6, day: 1),
         recurrence: .yearly(interval: 1, month: 6, day: 1, end: nil)
     ).validate()
 }
 
 @Test func validatesYearlyLeapDayReminderProposal() throws {
     try makeProposal(
+        start: makeDate(year: 2028, month: 2, day: 29),
         recurrence: .yearly(interval: 1, month: 2, day: 29, end: nil)
     ).validate()
 }
@@ -48,6 +53,20 @@ import Testing
 
     try makeProposal(
         start: nil,
+        schedulingMode: .findFreeTime,
+        searchWindow: window
+    ).validate()
+}
+
+@Test func findFreeTimeDoesNotValidateFirstOccurrenceBeforeScheduling() throws {
+    let window = ReminderSearchWindow(
+        start: makeDate(year: 2026, month: 6, day: 2),
+        end: makeDate(year: 2026, month: 6, day: 3)
+    )
+
+    try makeProposal(
+        start: nil,
+        recurrence: .weekly(interval: 1, weekdays: [.monday], end: nil),
         schedulingMode: .findFreeTime,
         searchWindow: window
     ).validate()
@@ -157,11 +176,38 @@ func rejectsNonPositiveRecurrenceInterval(recurrence: ReminderRecurrenceRule) {
     }
 }
 
+@Test func rejectsWeeklyReminderWhenStartWeekdayDoesNotMatch() {
+    #expect(throws: ReminderProposalValidationError.invalidFirstOccurrence) {
+        try makeProposal(
+            start: makeDate(year: 2026, month: 6, day: 2),
+            recurrence: .weekly(interval: 1, weekdays: [.monday], end: nil)
+        ).validate()
+    }
+}
+
 @Test(arguments: [0, 32])
 func rejectsMonthlyDayOutsideAllowedRange(day: Int) {
     #expect(throws: ReminderProposalValidationError.invalidMonthlyDay) {
         try makeProposal(
             recurrence: .monthly(interval: 1, day: day, end: nil)
+        ).validate()
+    }
+}
+
+@Test func rejectsMonthlyReminderWhenStartDayDoesNotMatch() {
+    #expect(throws: ReminderProposalValidationError.invalidFirstOccurrence) {
+        try makeProposal(
+            start: makeDate(year: 2026, month: 6, day: 14),
+            recurrence: .monthly(interval: 1, day: 15, end: nil)
+        ).validate()
+    }
+}
+
+@Test func rejectsMonthlyLastDayReminderWhenStartIsNotLastDay() {
+    #expect(throws: ReminderProposalValidationError.invalidFirstOccurrence) {
+        try makeProposal(
+            start: makeDate(year: 2026, month: 6, day: 29),
+            recurrence: .monthlyLastDay(interval: 1, end: nil)
         ).validate()
     }
 }
@@ -191,6 +237,15 @@ func rejectsYearlyDayOutsideAllowedRange(day: Int) {
 func rejectsImpossibleYearlyDate(recurrence: ReminderRecurrenceRule) {
     #expect(throws: ReminderProposalValidationError.invalidYearlyDate) {
         try makeProposal(recurrence: recurrence).validate()
+    }
+}
+
+@Test func rejectsYearlyReminderWhenStartMonthAndDayDoNotMatch() {
+    #expect(throws: ReminderProposalValidationError.invalidFirstOccurrence) {
+        try makeProposal(
+            start: makeDate(year: 2026, month: 6, day: 2),
+            recurrence: .yearly(interval: 1, month: 6, day: 1, end: nil)
+        ).validate()
     }
 }
 
@@ -252,4 +307,10 @@ private func makeProposal(
         notificationEnabled: true,
         calendarEnabled: true
     )
+}
+
+private func makeDate(year: Int, month: Int, day: Int) -> Date {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = .current
+    return calendar.date(from: DateComponents(year: year, month: month, day: day))!
 }

@@ -64,6 +64,7 @@ public enum ReminderProposalValidationError: Error, Equatable, Sendable {
     case invalidYearlyDate
     case invalidOccurrenceCount
     case invalidRecurrenceEndDate
+    case invalidFirstOccurrence
 }
 
 public struct ReminderProposal: Codable, Equatable, Sendable {
@@ -133,6 +134,9 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         }
 
         try recurrence.validate(anchor: anchor)
+        if schedulingMode == .fixed {
+            try recurrence.validateFirstOccurrence(anchor)
+        }
     }
 }
 
@@ -196,5 +200,32 @@ private extension ReminderRecurrenceRule {
         }
         let resolved = calendar.dateComponents([.month, .day], from: date)
         return resolved.month == month && resolved.day == day
+    }
+
+    func validateFirstOccurrence(_ start: Date) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+
+        let isValid: Bool
+        switch self {
+        case .once, .daily:
+            isValid = true
+        case let .weekly(_, weekdays, _):
+            isValid = weekdays.map(\.rawValue).contains(
+                calendar.component(.weekday, from: start)
+            )
+        case let .monthly(_, day, _):
+            isValid = calendar.component(.day, from: start) == day
+        case .monthlyLastDay:
+            isValid = calendar.range(of: .day, in: .month, for: start)?.last
+                == calendar.component(.day, from: start)
+        case let .yearly(_, month, day, _):
+            let components = calendar.dateComponents([.month, .day], from: start)
+            isValid = components.month == month && components.day == day
+        }
+
+        guard isValid else {
+            throw ReminderProposalValidationError.invalidFirstOccurrence
+        }
     }
 }
