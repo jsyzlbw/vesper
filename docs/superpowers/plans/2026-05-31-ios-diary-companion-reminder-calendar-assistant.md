@@ -451,6 +451,11 @@ After streaming completes:
 4. Query reminder records in `ChatView`.
 5. Render `ReminderProposalCard` below the linked message.
 
+During streaming, reuse `ReminderProposalEnvelopeParser.startMarker` and
+`endMarker` to buffer structured envelope content instead of persisting or
+rendering it incrementally. User-facing prose may continue streaming normally;
+JSON must never flash inside a chat bubble.
+
 The card displays title, first start, human-readable recurrence, proposed
 duration, scheduling mode, and output results. Wire `确认创建`, `编辑`, and `取消`.
 The first edit sheet supports title, start, duration, and enable toggles while
