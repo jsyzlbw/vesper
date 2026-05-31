@@ -142,6 +142,20 @@ import Testing
 }
 
 @MainActor
+@Test func migratedRepeatingLegacyReminderRequiresReconfirmation() throws {
+    let repository = try makeReminderRepository()
+    let record = makeMigratedLegacyReminderRecord(
+        fireDate: Date(timeIntervalSince1970: 8_000),
+        isScheduled: false
+    )
+    record.repeats = true
+
+    #expect(throws: DiaryRepositoryError.legacyRepeatingReminderRequiresReconfirmation(record.id)) {
+        try repository.reminderProposal(from: record)
+    }
+}
+
+@MainActor
 @Test func emptyRecurrenceDataWithNewProposalFieldsIsNotLegacy() throws {
     let repository = try makeReminderRepository()
     let record = makeMigratedLegacyReminderRecord(

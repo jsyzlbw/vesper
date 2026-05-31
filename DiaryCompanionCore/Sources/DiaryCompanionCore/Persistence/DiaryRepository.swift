@@ -9,6 +9,7 @@ public enum DiaryRepositoryError: Error, Equatable, Sendable {
     case invalidReminderRecurrenceData
     case invalidReminderSearchWindow
     case reminderRequiresExecutionReset(UUID)
+    case legacyRepeatingReminderRequiresReconfirmation(UUID)
 }
 
 @MainActor
@@ -115,6 +116,10 @@ public final class DiaryRepository {
 
     public func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal {
         if record.hasMigratedLegacyDefaults {
+            guard !record.repeats else {
+                throw DiaryRepositoryError
+                    .legacyRepeatingReminderRequiresReconfirmation(record.id)
+            }
             return try reconstructMigratedLegacyReminder(from: record)
         }
         guard ReminderProposalStatus(rawValue: record.status) != nil else {
