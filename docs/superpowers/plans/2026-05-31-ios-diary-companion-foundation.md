@@ -35,6 +35,7 @@ DiaryCompanionCore/
 │           └── KeychainStore.swift
 └── Tests/
     └── DiaryCompanionCoreTests/
+        ├── DiaryCompanionCoreTests.swift
         ├── KeychainStoreTests.swift
         ├── ProviderPresetTests.swift
         ├── ReminderRequestFactoryTests.swift
@@ -47,6 +48,7 @@ DiaryCompanionCore/
 - Create: `.gitignore`
 - Create: `DiaryCompanionCore/Package.swift`
 - Create: `DiaryCompanionCore/Sources/DiaryCompanionCore/DiaryCompanionCore.swift`
+- Create: `DiaryCompanionCore/Tests/DiaryCompanionCoreTests/DiaryCompanionCoreTests.swift`
 - Create: `DiaryCompanion/DiaryCompanionApp.swift`
 - Create: `DiaryCompanion/RootTabView.swift`
 - Create: `DiaryCompanion.xcodeproj/project.pbxproj`
@@ -98,6 +100,12 @@ Create `DiaryCompanionCore/Sources/DiaryCompanionCore/DiaryCompanionCore.swift`:
 
 ```swift
 public enum DiaryCompanionCoreModule {}
+```
+
+Create `DiaryCompanionCore/Tests/DiaryCompanionCoreTests/DiaryCompanionCoreTests.swift`:
+
+```swift
+import Testing
 ```
 
 Create `DiaryCompanion/DiaryCompanionApp.swift`:
@@ -444,7 +452,7 @@ Expected: package exits `0`, then Xcode reports `** BUILD SUCCEEDED **`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add .gitignore DiaryCompanion DiaryCompanion.xcodeproj DiaryCompanionCore/Package.swift DiaryCompanionCore/Sources/DiaryCompanionCore/DiaryCompanionCore.swift
+git add .gitignore DiaryCompanion DiaryCompanion.xcodeproj DiaryCompanionCore/Package.swift DiaryCompanionCore/Sources/DiaryCompanionCore/DiaryCompanionCore.swift DiaryCompanionCore/Tests/DiaryCompanionCoreTests/DiaryCompanionCoreTests.swift
 git commit -m "build: scaffold iOS diary companion"
 ```
 
