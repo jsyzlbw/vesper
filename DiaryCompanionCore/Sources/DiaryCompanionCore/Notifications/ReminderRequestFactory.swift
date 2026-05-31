@@ -59,15 +59,6 @@ public struct ReminderRequestFactory: Sendable {
         }
 
         let prefix = "diary.reminder.v1.\(reminderID.uuidString)"
-        if let requests = repeatingRequests(
-            prefix: prefix,
-            proposal: proposal,
-            anchor: anchor,
-            windowStart: windowStart
-        ) {
-            return requests
-        }
-
         return concreteOccurrences(
             recurrence: proposal.recurrence,
             anchor: anchor,
@@ -85,75 +76,6 @@ public struct ReminderRequestFactory: Sendable {
 }
 
 private extension ReminderRequestFactory {
-    func repeatingRequests(
-        prefix: String,
-        proposal: ReminderProposal,
-        anchor: Date,
-        windowStart: Date
-    ) -> [UNNotificationRequest]? {
-        let time = calendar.dateComponents([.hour, .minute], from: anchor)
-        let rules: [(suffix: String, components: DateComponents)]
-
-        switch proposal.recurrence {
-        case let .daily(interval, end) where interval == 1 && end == nil:
-            rules = [("daily", time)]
-        case let .weekly(interval, weekdays, end)
-            where interval == 1 && end == nil:
-            rules = weekdays
-                .sorted { $0.rawValue < $1.rawValue }
-                .map { weekday in
-                    var components = time
-                    components.weekday = weekday.rawValue
-                    return ("weekly.\(weekday.rawValue)", components)
-                }
-        case let .monthly(interval, day, end)
-            where interval == 1 && end == nil:
-            var components = time
-            components.day = day
-            rules = [("monthly.\(day)", components)]
-        case let .yearly(interval, month, day, end)
-            where interval == 1 && end == nil:
-            var components = time
-            components.month = month
-            components.day = day
-            rules = [("yearly.\(month).\(day)", components)]
-        default:
-            return nil
-        }
-
-        guard rules.allSatisfy({
-            nextMatchingDate(afterOrAt: windowStart, components: $0.components)
-                .map { $0 >= anchor } ?? false
-        }) else {
-            return nil
-        }
-
-        return rules.map { rule in
-            let content = content(for: proposal)
-            let trigger = UNCalendarNotificationTrigger(
-                dateMatching: rule.components,
-                repeats: true
-            )
-            return UNNotificationRequest(
-                identifier: "\(prefix).\(rule.suffix)",
-                content: content,
-                trigger: trigger
-            )
-        }
-    }
-
-    func nextMatchingDate(
-        afterOrAt date: Date,
-        components: DateComponents
-    ) -> Date? {
-        calendar.nextDate(
-            after: date.addingTimeInterval(-1),
-            matching: components,
-            matchingPolicy: .nextTime,
-            direction: .forward
-        )
-    }
-
     func concreteOccurrences(
         recurrence: ReminderRecurrenceRule,
         anchor: Date,
@@ -282,14 +204,6 @@ private extension ReminderRequestFactory {
         }
 
         return occurrences
-    }
-
-    func content(for proposal: ReminderProposal) -> UNMutableNotificationContent {
-        let content = UNMutableNotificationContent()
-        content.title = proposal.title
-        content.body = proposal.notes
-        content.sound = .default
-        return content
     }
 
     func weeklyOccurrence(

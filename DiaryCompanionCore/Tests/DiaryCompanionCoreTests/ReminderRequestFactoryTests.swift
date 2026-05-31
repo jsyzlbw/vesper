@@ -36,22 +36,23 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
     #expect(try fireDate(request) == date(2026, 6, 1, 20))
 }
 
-@Test func usesRepeatingTriggerForSafeDailyRule() throws {
+@Test func expandsSimpleDailyRuleAsConcreteRequests() throws {
     let requests = try makeRequests(
         start: date(2026, 6, 1, 9, 30),
         recurrence: .daily(interval: 1, end: nil),
-        windowStart: date(2026, 6, 1, 9)
+        windowStart: date(2026, 6, 1, 9),
+        windowDays: 3
     )
 
-    let request = try #require(requests.first)
-    #expect(requests.count == 1)
-    #expect(request.identifier == "\(identifierPrefix).daily")
-    #expect(try trigger(request).repeats)
-    #expect(try trigger(request).dateComponents.hour == 9)
-    #expect(try trigger(request).dateComponents.minute == 30)
+    #expect(try requests.map(fireDate) == [
+        date(2026, 6, 1, 9, 30),
+        date(2026, 6, 2, 9, 30),
+        date(2026, 6, 3, 9, 30),
+    ])
+    #expect(try requests.allSatisfy { try trigger($0).repeats == false })
 }
 
-@Test func usesOneRepeatingTriggerPerWeekdayForSafeWeeklyRule() throws {
+@Test func expandsSimpleWeeklyRuleAsConcreteRequests() throws {
     let requests = try makeRequests(
         start: date(2026, 6, 1, 9),
         recurrence: .weekly(
@@ -59,36 +60,40 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
             weekdays: [.monday, .wednesday],
             end: nil
         ),
-        windowStart: date(2026, 6, 1, 8)
+        windowStart: date(2026, 6, 1, 8),
+        windowDays: 4
     )
 
-    #expect(requests.map(\.identifier) == [
-        "\(identifierPrefix).weekly.2",
-        "\(identifierPrefix).weekly.4",
+    #expect(try requests.map(fireDate) == [
+        date(2026, 6, 1, 9),
+        date(2026, 6, 3, 9),
     ])
-    #expect(try requests.map { try trigger($0).dateComponents.weekday } == [2, 4])
-    #expect(try requests.allSatisfy { try trigger($0).repeats })
+    #expect(try requests.allSatisfy { try trigger($0).repeats == false })
 }
 
-@Test func usesRepeatingTriggersForSafeMonthlyAndYearlyRules() throws {
+@Test func expandsSimpleMonthlyAndYearlyRulesAsConcreteRequests() throws {
     let monthly = try makeRequests(
         start: date(2026, 6, 15, 9),
         recurrence: .monthly(interval: 1, day: 15, end: nil),
-        windowStart: date(2026, 6, 15, 8)
+        windowStart: date(2026, 6, 15, 8),
+        windowDays: 40
     )
     let yearly = try makeRequests(
         start: date(2026, 6, 15, 9),
         recurrence: .yearly(interval: 1, month: 6, day: 15, end: nil),
-        windowStart: date(2026, 6, 15, 8)
+        windowStart: date(2026, 6, 15, 8),
+        windowDays: 400
     )
 
-    #expect(monthly.map(\.identifier) == ["\(identifierPrefix).monthly.15"])
-    #expect(try trigger(monthly[0]).repeats)
-    #expect(try trigger(monthly[0]).dateComponents.day == 15)
-    #expect(yearly.map(\.identifier) == ["\(identifierPrefix).yearly.6.15"])
-    #expect(try trigger(yearly[0]).repeats)
-    #expect(try trigger(yearly[0]).dateComponents.month == 6)
-    #expect(try trigger(yearly[0]).dateComponents.day == 15)
+    #expect(try monthly.map(fireDate) == [
+        date(2026, 6, 15, 9),
+        date(2026, 7, 15, 9),
+    ])
+    #expect(try yearly.map(fireDate) == [
+        date(2026, 6, 15, 9),
+        date(2027, 6, 15, 9),
+    ])
+    #expect(try (monthly + yearly).allSatisfy { try trigger($0).repeats == false })
 }
 
 @Test func expandsBiweeklyRuleWithoutResettingAnchorPhase() throws {
@@ -243,6 +248,53 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
     #expect(requests.map(\.identifier) == ["\(identifierPrefix).at.1800000000"])
 }
 
+@Test func keepsConcreteRequestShapeAcrossRollingWindowsWithoutDuplicateIDs() throws {
+    let proposal = makeProposal(
+        start: date(2026, 1, 10, 9),
+        recurrence: .daily(interval: 1, end: nil)
+    )
+    let factory = ReminderRequestFactory(calendar: utcCalendar)
+    let initial = try factory.makeRequests(
+        reminderID: reminderID,
+        proposal: proposal,
+        windowStart: date(2026, 1, 1),
+        windowDays: 14
+    )
+    let replenished = try factory.makeRequests(
+        reminderID: reminderID,
+        proposal: proposal,
+        windowStart: date(2026, 1, 15),
+        windowDays: 5
+    )
+
+    #expect(try (initial + replenished).allSatisfy {
+        try trigger($0).repeats == false
+    })
+    #expect(Set(initial.map(\.identifier)).isDisjoint(
+        with: Set(replenished.map(\.identifier))
+    ))
+}
+
+@Test func expandsConcreteDailyRuleInInjectedTimeZoneAcrossDST() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    let requests = try ReminderRequestFactory(calendar: calendar).makeRequests(
+        reminderID: reminderID,
+        proposal: makeProposal(
+            start: date(2026, 3, 7, 9, calendar: calendar),
+            recurrence: .daily(interval: 1, end: nil)
+        ),
+        windowStart: date(2026, 3, 7, calendar: calendar),
+        windowDays: 3
+    )
+
+    #expect(try requests.map { try fireDate($0, calendar: calendar) } == [
+        date(2026, 3, 7, 9, calendar: calendar),
+        date(2026, 3, 8, 9, calendar: calendar),
+        date(2026, 3, 9, 9, calendar: calendar),
+    ])
+}
+
 @Test func rejectsProposalWithoutChosenStartAndNonPositiveWindow() throws {
     let proposal = makeProposal(
         start: nil,
@@ -321,8 +373,17 @@ private func trigger(
     try #require(request.trigger as? UNCalendarNotificationTrigger)
 }
 
-private func fireDate(_ request: UNNotificationRequest) throws -> Date {
-    try #require(utcCalendar.date(from: trigger(request).dateComponents))
+private func fireDate(
+    _ request: UNNotificationRequest
+) throws -> Date {
+    try fireDate(request, calendar: utcCalendar)
+}
+
+private func fireDate(
+    _ request: UNNotificationRequest,
+    calendar: Calendar
+) throws -> Date {
+    try #require(calendar.date(from: trigger(request).dateComponents))
 }
 
 private func date(
@@ -330,9 +391,10 @@ private func date(
     _ month: Int,
     _ day: Int,
     _ hour: Int = 0,
-    _ minute: Int = 0
+    _ minute: Int = 0,
+    calendar: Calendar = utcCalendar
 ) -> Date {
-    utcCalendar.date(
+    calendar.date(
         from: DateComponents(
             year: year,
             month: month,
