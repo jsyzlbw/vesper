@@ -1,3 +1,5 @@
+import DiaryCompanionCore
+import SwiftData
 import SwiftUI
 
 @main
@@ -6,5 +8,6 @@ struct DiaryCompanionApp: App {
         WindowGroup {
             RootTabView()
         }
+        .modelContainer(for: DiarySchema.models)
     }
 }
