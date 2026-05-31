@@ -2,6 +2,7 @@
 .worktrees/
 .build/
 DerivedData/
+artifacts/
 *.xcuserstate
 xcuserdata/
 logs/
