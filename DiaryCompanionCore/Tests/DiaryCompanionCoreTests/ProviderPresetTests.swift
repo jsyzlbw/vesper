@@ -15,7 +15,7 @@ import Testing
 
 @Test func siliconFlowUsesOpenAICompatibleProtocol() {
     #expect(ProviderPreset.siliconFlow.protocolKind == .openAICompatible)
-    #expect(ProviderPreset.siliconFlow.defaultBaseURL?.absoluteString == "https://api.siliconflow.cn/v1")
+    #expect(ProviderPreset.siliconFlow.defaultBaseURL?.absoluteString == "https://api.siliconflow.com/v1")
 }
 
 @Test func customProfilePreservesUserConfiguration() throws {

@@ -52,7 +52,7 @@ public enum ProviderPreset: String, Codable, CaseIterable, Identifiable, Sendabl
         case .anthropic: URL(string: "https://api.anthropic.com/v1")
         case .gemini: URL(string: "https://generativelanguage.googleapis.com/v1beta")
         case .deepSeek: URL(string: "https://api.deepseek.com")
-        case .siliconFlow: URL(string: "https://api.siliconflow.cn/v1")
+        case .siliconFlow: URL(string: "https://api.siliconflow.com/v1")
         case .custom: nil
         }
     }
