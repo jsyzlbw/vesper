@@ -26,6 +26,7 @@ public enum ToolExecutionResult: String, Codable, Equatable, Sendable {
     case success
     case failure
     case denied
+    case pendingConfirmation
 }
 
 public struct ToolAuditLog: Codable, Equatable, Identifiable, Sendable {
