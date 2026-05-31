@@ -2,6 +2,11 @@ import Foundation
 import Testing
 @testable import DiaryCompanionCore
 
+@Test func exposesReminderProposalEnvelopeMarkers() {
+    #expect(ReminderProposalEnvelopeParser.startMarker == "[[DIARY_REMINDER_PROPOSAL]]")
+    #expect(ReminderProposalEnvelopeParser.endMarker == "[[/DIARY_REMINDER_PROPOSAL]]")
+}
+
 @Test func parsesProseOnlyReminderProposalResponse() throws {
     let result = try ReminderProposalEnvelopeParser().parse("  先记录下来，稍后再安排。 \n")
 
@@ -113,6 +118,19 @@ import Testing
     #expect(proposal.recurrence == .daily(interval: 1, end: .occurrenceCount(4)))
 }
 
+@Test(arguments: [
+    #""2026-06-01T11:30:00Z""#,
+    #""2026-06-01T11:30:00.125Z""#,
+])
+func parsesSupportedISO8601Dates(start: String) throws {
+    let proposal = try parseProposal(proposalJSON(
+        recurrence: #"{"kind":"once"}"#,
+        start: start
+    ))
+
+    #expect(proposal.start != nil)
+}
+
 @Test func rejectsMalformedReminderProposalJSON() {
     #expect(throws: (any Error).self) {
         try parseProposal("{not-json}")
@@ -120,8 +138,17 @@ import Testing
 }
 
 @Test func rejectsEmptyReminderProposalJSON() {
-    #expect(throws: (any Error).self) {
+    #expect(throws: ReminderProposalEnvelopeParserError.emptyJSON) {
         try parseProposal(" \n ")
+    }
+}
+
+@Test func rejectsInvalidSchedulingMode() {
+    #expect(throws: ReminderProposalEnvelopeParserError.invalidSchedulingMode("floating")) {
+        try parseProposal(proposalJSON(
+            recurrence: #"{"kind":"once"}"#,
+            schedulingMode: "floating"
+        ))
     }
 }
 
@@ -139,7 +166,7 @@ import Testing
     "{}\n[[/DIARY_REMINDER_PROPOSAL]]",
 ])
 func rejectsUnmatchedReminderProposalMarker(text: String) {
-    #expect(throws: (any Error).self) {
+    #expect(throws: ReminderProposalEnvelopeParserError.invalidEnvelope) {
         try ReminderProposalEnvelopeParser().parse(text)
     }
 }
@@ -147,19 +174,54 @@ func rejectsUnmatchedReminderProposalMarker(text: String) {
 @Test func rejectsMultipleReminderProposalEnvelopes() {
     let envelope = reminderProposalEnvelope(proposalJSON(recurrence: #"{"kind":"once"}"#))
 
-    #expect(throws: (any Error).self) {
+    #expect(throws: ReminderProposalEnvelopeParserError.invalidEnvelope) {
         try ReminderProposalEnvelopeParser().parse("\(envelope)\n\(envelope)")
     }
 }
 
+@Test func rejectsInvalidRecurrenceKind() {
+    #expect(throws: ReminderProposalEnvelopeParserError.invalidRecurrenceKind("hourly")) {
+        try parseProposal(proposalJSON(
+            recurrence: #"{"kind":"hourly","interval":1}"#
+        ))
+    }
+}
+
+@Test func rejectsInvalidWeekday() {
+    #expect(throws: ReminderProposalEnvelopeParserError.invalidWeekday(0)) {
+        try parseProposal(proposalJSON(
+            recurrence: #"{"kind":"weekly","interval":1,"weekdays":[0]}"#
+        ))
+    }
+}
+
+@Test func rejectsMissingRequiredRecurrenceField() {
+    #expect(throws: ReminderProposalEnvelopeParserError.missingField("recurrence.day")) {
+        try parseProposal(proposalJSON(
+            recurrence: #"{"kind":"monthly","interval":1}"#
+        ))
+    }
+}
+
 @Test(arguments: [
-    #"{"kind":"hourly","interval":1}"#,
-    #"{"kind":"weekly","interval":1,"weekdays":[0]}"#,
-    #"{"kind":"monthly","interval":1}"#,
+    (#"{"kind":"once","interval":1}"#, "recurrence.interval"),
+    (#"{"kind":"daily","interval":1,"weekdays":[2]}"#, "recurrence.weekdays"),
 ])
-func rejectsInvalidRecurrenceDTO(recurrenceJSON: String) {
-    #expect(throws: (any Error).self) {
+func rejectsUnexpectedRecurrenceField(recurrenceJSON: String, path: String) {
+    #expect(throws: ReminderProposalEnvelopeParserError.unexpectedField(path)) {
         try parseProposal(proposalJSON(recurrence: recurrenceJSON))
+    }
+}
+
+@Test func rejectsUnexpectedRecurrenceEndField() {
+    #expect(throws: ReminderProposalEnvelopeParserError.unexpectedField(
+        "recurrence.end.occurrenceCount"
+    )) {
+        try parseProposal(proposalJSON(
+            recurrence: """
+            {"kind":"daily","interval":1,"end":{"kind":"date","date":"2026-06-30T19:30:00+08:00","occurrenceCount":4}}
+            """
+        ))
     }
 }
 
@@ -172,9 +234,9 @@ private func parseProposal(_ json: String) throws -> ReminderProposal {
 
 private func reminderProposalEnvelope(_ json: String) -> String {
     """
-    [[DIARY_REMINDER_PROPOSAL]]
+    \(ReminderProposalEnvelopeParser.startMarker)
     \(json)
-    [[/DIARY_REMINDER_PROPOSAL]]
+    \(ReminderProposalEnvelopeParser.endMarker)
     """
 }
 
