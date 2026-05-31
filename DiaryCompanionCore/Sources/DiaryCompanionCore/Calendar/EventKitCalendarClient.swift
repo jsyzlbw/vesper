@@ -38,12 +38,18 @@ public final class EventKitCalendarClient: CalendarClient {
             calendars: calendars
         )
 
-        return eventStore.events(matching: predicate).map {
-            DateInterval(start: $0.startDate, end: $0.endDate)
+        return eventStore.events(matching: predicate).compactMap {
+            Self.interval(
+                start: $0.startDate,
+                end: $0.endDate,
+                availability: $0.availability,
+                within: searchWindow
+            )
         }
     }
 
     public func createEvent(for proposal: ReminderProposal) async throws -> String {
+        try proposal.validate()
         guard let start = proposal.start else {
             throw EventKitCalendarClientError.missingStart
         }
@@ -74,7 +80,33 @@ public final class EventKitCalendarClient: CalendarClient {
         guard let event = eventStore.event(withIdentifier: identifier) else {
             throw EventKitCalendarClientError.eventNotFound(identifier)
         }
-        try eventStore.remove(event, span: .thisEvent)
+        try eventStore.remove(
+            event,
+            span: Self.removalSpan(hasRecurrenceRules: event.hasRecurrenceRules)
+        )
+    }
+
+    nonisolated static func interval(
+        start: Date?,
+        end: Date?,
+        availability: EKEventAvailability,
+        within searchWindow: DateInterval
+    ) -> DateInterval? {
+        guard availability != .free, let start, let end, end > start else {
+            return nil
+        }
+        guard let clipped = DateInterval(start: start, end: end).intersection(
+            with: searchWindow
+        ), clipped.duration > 0 else {
+            return nil
+        }
+        return clipped
+    }
+
+    nonisolated static func removalSpan(
+        hasRecurrenceRules: Bool
+    ) -> EKSpan {
+        hasRecurrenceRules ? .futureEvents : .thisEvent
     }
 }
 
