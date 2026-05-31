@@ -38,6 +38,22 @@ public enum ReminderSchedulingMode: String, Codable, Equatable, Sendable {
     case findFreeTime
 }
 
+public enum ReminderProposalStatus: String, Codable, Equatable, Sendable {
+    case pendingConfirmation
+    case executing
+    case scheduled
+    case cancelled
+}
+
+public enum ReminderExecutionResult: String, Codable, Equatable, Sendable {
+    case notRequested
+    case pending
+    case scheduled
+    case created
+    case permissionDenied
+    case failed
+}
+
 public struct ReminderSearchWindow: Codable, Equatable, Sendable {
     public var start: Date
     public var end: Date

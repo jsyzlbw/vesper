@@ -1,6 +1,14 @@
 import Foundation
 import SwiftData
 
+public enum DiaryRepositoryError: Error, Equatable, Sendable {
+    case reminderNotFound(UUID)
+    case invalidReminderSchedulingMode(String)
+    case invalidReminderStatus(String)
+    case invalidReminderExecutionResult(String)
+    case invalidReminderRecurrenceData
+}
+
 @MainActor
 public final class DiaryRepository {
     private let context: ModelContext
@@ -72,9 +80,150 @@ public final class DiaryRepository {
         return try context.fetch(descriptor)
     }
 
+    @discardableResult
+    public func createReminderProposal(
+        _ proposal: ReminderProposal,
+        sourceMessageID: UUID?
+    ) throws -> ReminderRecord {
+        try proposal.validate()
+        let record = ReminderRecord(
+            title: proposal.title,
+            notes: proposal.notes,
+            firstOccurrence: proposal.start,
+            durationMinutes: proposal.durationMinutes,
+            recurrenceData: try JSONEncoder().encode(proposal.recurrence),
+            schedulingMode: proposal.schedulingMode.rawValue,
+            searchWindowStart: proposal.searchWindow?.start,
+            searchWindowEnd: proposal.searchWindow?.end,
+            notificationEnabled: proposal.notificationEnabled,
+            calendarEnabled: proposal.calendarEnabled,
+            sourceMessageID: sourceMessageID
+        )
+        record.repeats = proposal.recurrence.isRepeating
+        context.insert(record)
+        try context.save()
+        return record
+    }
+
+    public func fetchReminders() throws -> [ReminderRecord] {
+        var descriptor = FetchDescriptor<ReminderRecord>()
+        descriptor.sortBy = [SortDescriptor(\.fireDate)]
+        return try context.fetch(descriptor)
+    }
+
+    public func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal {
+        guard ReminderProposalStatus(rawValue: record.status) != nil else {
+            throw DiaryRepositoryError.invalidReminderStatus(record.status)
+        }
+        try validateExecutionResult(record.notificationResult)
+        try validateExecutionResult(record.calendarResult)
+        guard let schedulingMode = ReminderSchedulingMode(rawValue: record.schedulingMode) else {
+            throw DiaryRepositoryError.invalidReminderSchedulingMode(record.schedulingMode)
+        }
+        let recurrence: ReminderRecurrenceRule
+        do {
+            recurrence = try JSONDecoder().decode(
+                ReminderRecurrenceRule.self,
+                from: record.recurrenceData
+            )
+        } catch {
+            throw DiaryRepositoryError.invalidReminderRecurrenceData
+        }
+        let searchWindow: ReminderSearchWindow?
+        switch (record.searchWindowStart, record.searchWindowEnd) {
+        case let (start?, end?):
+            searchWindow = ReminderSearchWindow(start: start, end: end)
+        default:
+            searchWindow = nil
+        }
+        return ReminderProposal(
+            title: record.title,
+            notes: record.notes,
+            start: record.firstOccurrence,
+            durationMinutes: record.durationMinutes,
+            recurrence: recurrence,
+            schedulingMode: schedulingMode,
+            searchWindow: searchWindow,
+            notificationEnabled: record.notificationEnabled,
+            calendarEnabled: record.calendarEnabled
+        )
+    }
+
+    public func updateReminderExecution(
+        id: UUID,
+        status: ReminderProposalStatus,
+        notificationResult: ReminderExecutionResult,
+        calendarResult: ReminderExecutionResult,
+        notificationIdentifiers: [String],
+        calendarEventIdentifier: String?
+    ) throws {
+        let record = try reminder(id: id)
+        record.status = status.rawValue
+        record.notificationResult = notificationResult.rawValue
+        record.calendarResult = calendarResult.rawValue
+        record.notificationIdentifiers = notificationIdentifiers
+        record.calendarEventIdentifier = calendarEventIdentifier
+        record.isScheduled = status == .scheduled
+        try context.save()
+    }
+
+    public func updateReminderProposal(
+        id: UUID,
+        proposal: ReminderProposal
+    ) throws {
+        try proposal.validate()
+        let record = try reminder(id: id)
+        record.title = proposal.title
+        record.body = proposal.notes
+        record.fireDate = proposal.start ?? proposal.searchWindow?.start ?? .distantPast
+        record.repeats = proposal.recurrence.isRepeating
+        record.notes = proposal.notes
+        record.firstOccurrence = proposal.start
+        record.durationMinutes = proposal.durationMinutes
+        record.recurrenceData = try JSONEncoder().encode(proposal.recurrence)
+        record.schedulingMode = proposal.schedulingMode.rawValue
+        record.searchWindowStart = proposal.searchWindow?.start
+        record.searchWindowEnd = proposal.searchWindow?.end
+        record.notificationEnabled = proposal.notificationEnabled
+        record.calendarEnabled = proposal.calendarEnabled
+        try context.save()
+    }
+
+    public func cancelReminder(id: UUID) throws {
+        let record = try reminder(id: id)
+        record.status = ReminderProposalStatus.cancelled.rawValue
+        record.isScheduled = false
+        try context.save()
+    }
+
     public func fetchAuditLogs() throws -> [ToolAuditRecord] {
         var descriptor = FetchDescriptor<ToolAuditRecord>()
         descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
+    }
+
+    private func reminder(id: UUID) throws -> ReminderRecord {
+        let descriptor = FetchDescriptor<ReminderRecord>(
+            predicate: #Predicate { $0.id == id }
+        )
+        guard let record = try context.fetch(descriptor).first else {
+            throw DiaryRepositoryError.reminderNotFound(id)
+        }
+        return record
+    }
+
+    private func validateExecutionResult(_ rawValue: String) throws {
+        guard ReminderExecutionResult(rawValue: rawValue) != nil else {
+            throw DiaryRepositoryError.invalidReminderExecutionResult(rawValue)
+        }
+    }
+}
+
+private extension ReminderRecurrenceRule {
+    var isRepeating: Bool {
+        if case .once = self {
+            return false
+        }
+        return true
     }
 }

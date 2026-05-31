@@ -1,0 +1,187 @@
+import Foundation
+import SwiftData
+import Testing
+@testable import DiaryCompanionCore
+
+@MainActor
+@Test func reminderProposalRoundTripsWithDefaultsAndSourceMessage() throws {
+    let repository = try makeReminderRepository()
+    let sourceMessageID = UUID()
+    let proposal = makeFindFreeTimeProposal()
+
+    let created = try repository.createReminderProposal(
+        proposal,
+        sourceMessageID: sourceMessageID
+    )
+    let fetched = try #require(repository.fetchReminders().first)
+
+    #expect(fetched.id == created.id)
+    #expect(fetched.sourceMessageID == sourceMessageID)
+    #expect(fetched.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(fetched.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(fetched.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(fetched.notificationIdentifiers.isEmpty)
+    #expect(fetched.calendarEventIdentifier == nil)
+    #expect(try repository.reminderProposal(from: fetched) == proposal)
+}
+
+@MainActor
+@Test func reminderExecutionUpdatePersistsResultsAndIdentifiers() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+
+    try repository.updateReminderExecution(
+        id: record.id,
+        status: .scheduled,
+        notificationResult: .scheduled,
+        calendarResult: .permissionDenied,
+        notificationIdentifiers: ["notification-1", "notification-2"],
+        calendarEventIdentifier: "calendar-1"
+    )
+
+    let fetched = try #require(repository.fetchReminders().first)
+    #expect(fetched.status == ReminderProposalStatus.scheduled.rawValue)
+    #expect(fetched.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(fetched.calendarResult == ReminderExecutionResult.permissionDenied.rawValue)
+    #expect(fetched.notificationIdentifiers == ["notification-1", "notification-2"])
+    #expect(fetched.calendarEventIdentifier == "calendar-1")
+}
+
+@MainActor
+@Test func reminderProposalUpdatePersistsEditedFields() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    let edited = ReminderProposal(
+        title: "Edited reminder",
+        notes: "Bring a notebook",
+        start: Date(timeIntervalSince1970: 5_000),
+        durationMinutes: 45,
+        recurrence: .daily(interval: 2, end: .occurrenceCount(4)),
+        schedulingMode: .fixed,
+        searchWindow: nil,
+        notificationEnabled: false,
+        calendarEnabled: true
+    )
+
+    try repository.updateReminderProposal(id: record.id, proposal: edited)
+
+    let fetched = try #require(repository.fetchReminders().first)
+    #expect(try repository.reminderProposal(from: fetched) == edited)
+}
+
+@MainActor
+@Test func cancellingReminderPersistsCancelledStatus() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+
+    try repository.cancelReminder(id: record.id)
+
+    let fetched = try #require(repository.fetchReminders().first)
+    #expect(fetched.status == ReminderProposalStatus.cancelled.rawValue)
+}
+
+@MainActor
+@Test func updatingUnknownReminderThrowsRepositoryError() throws {
+    let repository = try makeReminderRepository()
+    let id = UUID()
+
+    #expect(throws: DiaryRepositoryError.reminderNotFound(id)) {
+        try repository.cancelReminder(id: id)
+    }
+}
+
+@MainActor
+@Test func reconstructingReminderRejectsInvalidSchedulingMode() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.schedulingMode = "eventually"
+
+    #expect(throws: DiaryRepositoryError.invalidReminderSchedulingMode("eventually")) {
+        try repository.reminderProposal(from: record)
+    }
+}
+
+@MainActor
+@Test func reconstructingReminderRejectsInvalidStatus() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.status = "unknown"
+
+    #expect(throws: DiaryRepositoryError.invalidReminderStatus("unknown")) {
+        try repository.reminderProposal(from: record)
+    }
+}
+
+@MainActor
+@Test func fetchRemindersSortsByFirstOccurrence() throws {
+    let repository = try makeReminderRepository()
+    let later = makeFixedProposal(start: Date(timeIntervalSince1970: 9_000))
+    let earlier = makeFixedProposal(start: Date(timeIntervalSince1970: 3_000))
+
+    try repository.createReminderProposal(later, sourceMessageID: nil)
+    try repository.createReminderProposal(earlier, sourceMessageID: nil)
+
+    #expect(try repository.fetchReminders().map(\.title) == [
+        earlier.title,
+        later.title,
+    ])
+}
+
+@MainActor
+private func makeReminderRepository() throws -> DiaryRepository {
+    let container = try DiaryModelContainerFactory.make(inMemory: true)
+    retainedReminderContainers.append(container)
+    return DiaryRepository(context: container.mainContext)
+}
+
+@MainActor private var retainedReminderContainers: [ModelContainer] = []
+
+private func makeFindFreeTimeProposal() -> ReminderProposal {
+    ReminderProposal(
+        title: "Weekly planning",
+        notes: "Find a quiet slot",
+        start: nil,
+        durationMinutes: 30,
+        recurrence: .weekly(
+            interval: 1,
+            weekdays: [.monday, .wednesday],
+            end: .occurrenceCount(6)
+        ),
+        schedulingMode: .findFreeTime,
+        searchWindow: ReminderSearchWindow(
+            start: Date(timeIntervalSince1970: 10_000),
+            end: Date(timeIntervalSince1970: 20_000)
+        ),
+        notificationEnabled: true,
+        calendarEnabled: true
+    )
+}
+
+private func makeFixedProposal(start: Date) -> ReminderProposal {
+    ReminderProposal(
+        title: "Reminder \(start.timeIntervalSince1970)",
+        notes: "",
+        start: start,
+        durationMinutes: 10,
+        recurrence: .once,
+        schedulingMode: .fixed,
+        searchWindow: nil,
+        notificationEnabled: true,
+        calendarEnabled: false
+    )
+}

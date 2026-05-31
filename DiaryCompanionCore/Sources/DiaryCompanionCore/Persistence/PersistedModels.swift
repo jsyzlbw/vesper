@@ -97,6 +97,21 @@ import SwiftData
     public var fireDate: Date
     public var repeats: Bool
     public var isScheduled: Bool
+    public var notes: String = ""
+    public var firstOccurrence: Date?
+    public var durationMinutes: Int = 0
+    public var recurrenceData: Data = Data()
+    public var schedulingMode: String = ReminderSchedulingMode.fixed.rawValue
+    public var searchWindowStart: Date?
+    public var searchWindowEnd: Date?
+    public var notificationEnabled: Bool = false
+    public var calendarEnabled: Bool = false
+    public var status: String = ReminderProposalStatus.pendingConfirmation.rawValue
+    public var notificationResult: String = ReminderExecutionResult.notRequested.rawValue
+    public var calendarResult: String = ReminderExecutionResult.notRequested.rawValue
+    public var sourceMessageID: UUID?
+    public var notificationIdentifiers: [String] = []
+    public var calendarEventIdentifier: String?
 
     public init(
         id: UUID = UUID(),
@@ -114,6 +129,50 @@ import SwiftData
         self.fireDate = fireDate
         self.repeats = repeats
         self.isScheduled = isScheduled
+    }
+
+    public init(
+        id: UUID = UUID(),
+        taskID: UUID? = nil,
+        title: String,
+        notes: String,
+        firstOccurrence: Date?,
+        durationMinutes: Int,
+        recurrenceData: Data,
+        schedulingMode: String,
+        searchWindowStart: Date?,
+        searchWindowEnd: Date?,
+        notificationEnabled: Bool,
+        calendarEnabled: Bool,
+        status: String = ReminderProposalStatus.pendingConfirmation.rawValue,
+        notificationResult: String = ReminderExecutionResult.notRequested.rawValue,
+        calendarResult: String = ReminderExecutionResult.notRequested.rawValue,
+        sourceMessageID: UUID? = nil,
+        notificationIdentifiers: [String] = [],
+        calendarEventIdentifier: String? = nil
+    ) {
+        self.id = id
+        self.taskID = taskID
+        self.title = title
+        self.body = notes
+        self.fireDate = firstOccurrence ?? searchWindowStart ?? .distantPast
+        self.repeats = false
+        self.isScheduled = status == ReminderProposalStatus.scheduled.rawValue
+        self.notes = notes
+        self.firstOccurrence = firstOccurrence
+        self.durationMinutes = durationMinutes
+        self.recurrenceData = recurrenceData
+        self.schedulingMode = schedulingMode
+        self.searchWindowStart = searchWindowStart
+        self.searchWindowEnd = searchWindowEnd
+        self.notificationEnabled = notificationEnabled
+        self.calendarEnabled = calendarEnabled
+        self.status = status
+        self.notificationResult = notificationResult
+        self.calendarResult = calendarResult
+        self.sourceMessageID = sourceMessageID
+        self.notificationIdentifiers = notificationIdentifiers
+        self.calendarEventIdentifier = calendarEventIdentifier
     }
 }
 
