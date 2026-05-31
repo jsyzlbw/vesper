@@ -11,6 +11,7 @@
 		AA0000000000000000000002 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* RootTabView.swift */; };
 		AA0000000000000000000003 /* DiaryCompanionCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000041 /* DiaryCompanionCore */; };
 		AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* ProviderSettingsView.swift */; };
+		AA0000000000000000000005 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000014 /* ChatView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +19,7 @@
 		AA0000000000000000000011 /* DiaryCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryCompanionApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000012 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000013 /* ProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSettingsView.swift; sourceTree = "<group>"; };
+		AA0000000000000000000014 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +48,7 @@
 				AA0000000000000000000011 /* DiaryCompanionApp.swift */,
 				AA0000000000000000000012 /* RootTabView.swift */,
 				AA0000000000000000000013 /* ProviderSettingsView.swift */,
+				AA0000000000000000000014 /* ChatView.swift */,
 			);
 			path = DiaryCompanion;
 			sourceTree = "<group>";
@@ -135,6 +138,7 @@
 				AA0000000000000000000001 /* DiaryCompanionApp.swift in Sources */,
 				AA0000000000000000000002 /* RootTabView.swift in Sources */,
 				AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */,
+				AA0000000000000000000005 /* ChatView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -6,12 +6,7 @@ struct RootTabView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                ContentUnavailableView(
-                    "开始对话",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("连接 AI Provider 后，通过自然语言记录生活。")
-                )
-                .navigationTitle("对话")
+                ChatView()
             }
             .tabItem {
                 Label("对话", systemImage: "bubble.left.and.bubble.right")
