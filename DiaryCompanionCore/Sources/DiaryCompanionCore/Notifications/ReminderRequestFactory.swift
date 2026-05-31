@@ -4,6 +4,7 @@ import UserNotifications
 public enum ReminderRequestFactoryError: Error, Equatable, Sendable {
     case missingStart
     case invalidWindowDays
+    case invalidMaxRequests
 }
 
 public struct ReminderRequestFactory: Sendable {
@@ -43,7 +44,8 @@ public struct ReminderRequestFactory: Sendable {
         reminderID: UUID,
         proposal: ReminderProposal,
         windowStart: Date,
-        windowDays: Int = 90
+        windowDays: Int = 90,
+        maxRequests: Int = 60
     ) throws -> [UNNotificationRequest] {
         try proposal.validate()
         guard let anchor = proposal.start else {
@@ -57,6 +59,9 @@ public struct ReminderRequestFactory: Sendable {
               ) else {
             throw ReminderRequestFactoryError.invalidWindowDays
         }
+        guard maxRequests > 0 else {
+            throw ReminderRequestFactoryError.invalidMaxRequests
+        }
 
         let prefix = "diary.reminder.v1.\(reminderID.uuidString)"
         return concreteOccurrences(
@@ -64,7 +69,7 @@ public struct ReminderRequestFactory: Sendable {
             anchor: anchor,
             windowStart: windowStart,
             windowEnd: windowEnd
-        ).map { occurrence in
+        ).sorted().prefix(maxRequests).map { occurrence in
             makeRequest(
                 id: "\(prefix).at.\(Int64(occurrence.timeIntervalSince1970))",
                 title: proposal.title,

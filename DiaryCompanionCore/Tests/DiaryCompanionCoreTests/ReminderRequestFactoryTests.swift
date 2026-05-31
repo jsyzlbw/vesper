@@ -248,6 +248,35 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
     #expect(requests.map(\.identifier) == ["\(identifierPrefix).at.1800000000"])
 }
 
+@Test func limitsDefaultDailyRequestsToEarliestSixtyOccurrences() throws {
+    let requests = try makeRequests(
+        start: date(2026, 1, 1, 9),
+        recurrence: .daily(interval: 1, end: nil),
+        windowStart: date(2026, 1, 1),
+        windowDays: 90
+    )
+
+    #expect(requests.count == 60)
+    #expect(try requests.map(fireDate) == (0..<60).map {
+        utcCalendar.date(byAdding: .day, value: $0, to: date(2026, 1, 1, 9))!
+    })
+}
+
+@Test func limitsDailyRequestsToConfiguredEarliestPrefix() throws {
+    let requests = try makeRequests(
+        start: date(2026, 1, 1, 9),
+        recurrence: .daily(interval: 1, end: nil),
+        windowStart: date(2026, 1, 1),
+        windowDays: 90,
+        maxRequests: 2
+    )
+
+    #expect(try requests.map(fireDate) == [
+        date(2026, 1, 1, 9),
+        date(2026, 1, 2, 9),
+    ])
+}
+
 @Test func keepsConcreteRequestShapeAcrossRollingWindowsWithoutDuplicateIDs() throws {
     let proposal = makeProposal(
         start: date(2026, 1, 10, 9),
@@ -322,6 +351,14 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
             windowDays: 0
         )
     }
+    #expect(throws: ReminderRequestFactoryError.invalidMaxRequests) {
+        try factory.makeRequests(
+            reminderID: reminderID,
+            proposal: makeProposal(),
+            windowStart: date(2026, 1, 1),
+            maxRequests: 0
+        )
+    }
 }
 
 private var utcCalendar: Calendar {
@@ -338,13 +375,15 @@ private func makeRequests(
     start: Date?,
     recurrence: ReminderRecurrenceRule,
     windowStart: Date,
-    windowDays: Int = 90
+    windowDays: Int = 90,
+    maxRequests: Int = 60
 ) throws -> [UNNotificationRequest] {
     try ReminderRequestFactory(calendar: utcCalendar).makeRequests(
         reminderID: reminderID,
         proposal: makeProposal(start: start, recurrence: recurrence),
         windowStart: windowStart,
-        windowDays: windowDays
+        windowDays: windowDays,
+        maxRequests: maxRequests
     )
 }
 
