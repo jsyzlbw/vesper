@@ -399,16 +399,21 @@ Define injectable protocols:
 public protocol ReminderNotificationScheduling: Sendable {
     func requestAuthorization() async throws -> Bool
     func add(_ requests: [UNNotificationRequest]) async throws
+    func removePendingRequests(withIdentifiers identifiers: [String])
 }
 
 public protocol ReminderCalendarScheduling: Sendable {
     func requestFullAccess() async throws -> Bool
     func createEvent(for proposal: ReminderProposal) async throws -> String
+    func removeEvent(identifier: String) throws
 }
 ```
 
 Implement `confirm(reminderID:)` so each output is attempted separately and the
-repository is updated with partial results.
+repository is updated with partial results. Add coordinator edit and cancel
+paths that remove previously scheduled notification identifiers and EventKit
+events before resetting repository execution state. Repository methods must not
+silently edit or cancel records while external resources are still attached.
 
 - [ ] **Step 4: Run tests and commit**
 
