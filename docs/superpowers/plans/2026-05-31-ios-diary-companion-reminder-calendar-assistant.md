@@ -287,14 +287,16 @@ public func makeRequests(
     reminderID: UUID,
     proposal: ReminderProposal,
     windowStart: Date,
-    windowDays: Int = 90
+    windowDays: Int = 90,
+    maxRequests: Int = 60
 ) throws -> [UNNotificationRequest]
 ```
 
 Expand every recurrence rule into dated non-repeating requests. This keeps
 request shape stable across app activations and makes replenishment idempotent.
 Native repeating triggers may be added later only with explicit replacement and
-revocation semantics.
+revocation semantics. Return only the earliest `maxRequests` occurrences so one
+reminder cannot exhaust the system notification budget.
 
 - [ ] **Step 4: Run tests and commit**
 
@@ -519,9 +521,11 @@ public struct ReminderNotificationReplenisher: Sendable {
 ```
 
 Use `ReminderRequestFactory.makeRequests` with a 90-day horizon, filter out
-persisted identifiers, schedule only new requests, and persist the merged
-identifier list. Trigger replenishment from the SwiftUI app when scene phase
-becomes `.active`.
+persisted identifiers, merge candidates across confirmed reminders, sort by
+fire date, and keep a global earliest-first budget of 60 pending requests.
+Remove pending requests that fall outside that selected set, schedule only new
+requests, and persist the reconciled identifier lists. Trigger replenishment
+from the SwiftUI app when scene phase becomes `.active`.
 
 - [ ] **Step 4: Run tests and commit**
 
