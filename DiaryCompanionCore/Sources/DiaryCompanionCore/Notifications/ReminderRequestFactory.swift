@@ -1,6 +1,11 @@
 import Foundation
 import UserNotifications
 
+public enum ReminderRequestFactoryError: Error, Equatable, Sendable {
+    case missingStart
+    case invalidWindowDays
+}
+
 public struct ReminderRequestFactory: Sendable {
     private let calendar: Calendar
 
@@ -32,5 +37,336 @@ public struct ReminderRequestFactory: Sendable {
             content: content,
             trigger: trigger
         )
+    }
+
+    public func makeRequests(
+        reminderID: UUID,
+        proposal: ReminderProposal,
+        windowStart: Date,
+        windowDays: Int = 90
+    ) throws -> [UNNotificationRequest] {
+        try proposal.validate()
+        guard let anchor = proposal.start else {
+            throw ReminderRequestFactoryError.missingStart
+        }
+        guard windowDays > 0,
+              let windowEnd = calendar.date(
+                  byAdding: .day,
+                  value: windowDays,
+                  to: windowStart
+              ) else {
+            throw ReminderRequestFactoryError.invalidWindowDays
+        }
+
+        let prefix = "diary.reminder.v1.\(reminderID.uuidString)"
+        if let requests = repeatingRequests(
+            prefix: prefix,
+            proposal: proposal,
+            anchor: anchor,
+            windowStart: windowStart
+        ) {
+            return requests
+        }
+
+        return concreteOccurrences(
+            recurrence: proposal.recurrence,
+            anchor: anchor,
+            windowStart: windowStart,
+            windowEnd: windowEnd
+        ).map { occurrence in
+            makeRequest(
+                id: "\(prefix).at.\(Int64(occurrence.timeIntervalSince1970))",
+                title: proposal.title,
+                body: proposal.notes,
+                fireDate: occurrence
+            )
+        }
+    }
+}
+
+private extension ReminderRequestFactory {
+    func repeatingRequests(
+        prefix: String,
+        proposal: ReminderProposal,
+        anchor: Date,
+        windowStart: Date
+    ) -> [UNNotificationRequest]? {
+        let time = calendar.dateComponents([.hour, .minute], from: anchor)
+        let rules: [(suffix: String, components: DateComponents)]
+
+        switch proposal.recurrence {
+        case let .daily(interval, end) where interval == 1 && end == nil:
+            rules = [("daily", time)]
+        case let .weekly(interval, weekdays, end)
+            where interval == 1 && end == nil:
+            rules = weekdays
+                .sorted { $0.rawValue < $1.rawValue }
+                .map { weekday in
+                    var components = time
+                    components.weekday = weekday.rawValue
+                    return ("weekly.\(weekday.rawValue)", components)
+                }
+        case let .monthly(interval, day, end)
+            where interval == 1 && end == nil:
+            var components = time
+            components.day = day
+            rules = [("monthly.\(day)", components)]
+        case let .yearly(interval, month, day, end)
+            where interval == 1 && end == nil:
+            var components = time
+            components.month = month
+            components.day = day
+            rules = [("yearly.\(month).\(day)", components)]
+        default:
+            return nil
+        }
+
+        guard rules.allSatisfy({
+            nextMatchingDate(afterOrAt: windowStart, components: $0.components)
+                .map { $0 >= anchor } ?? false
+        }) else {
+            return nil
+        }
+
+        return rules.map { rule in
+            let content = content(for: proposal)
+            let trigger = UNCalendarNotificationTrigger(
+                dateMatching: rule.components,
+                repeats: true
+            )
+            return UNNotificationRequest(
+                identifier: "\(prefix).\(rule.suffix)",
+                content: content,
+                trigger: trigger
+            )
+        }
+    }
+
+    func nextMatchingDate(
+        afterOrAt date: Date,
+        components: DateComponents
+    ) -> Date? {
+        calendar.nextDate(
+            after: date.addingTimeInterval(-1),
+            matching: components,
+            matchingPolicy: .nextTime,
+            direction: .forward
+        )
+    }
+
+    func concreteOccurrences(
+        recurrence: ReminderRecurrenceRule,
+        anchor: Date,
+        windowStart: Date,
+        windowEnd: Date
+    ) -> [Date] {
+        var occurrences: [Date] = []
+        var occurrenceCount = 0
+        let end = recurrence.end
+
+        func shouldContinue(_ occurrence: Date) -> Bool {
+            guard occurrence < windowEnd else {
+                return false
+            }
+            if case let .date(endDate) = end, occurrence > endDate {
+                return false
+            }
+            if case let .occurrenceCount(limit) = end,
+               occurrenceCount >= limit {
+                return false
+            }
+            return true
+        }
+
+        func record(_ occurrence: Date) -> Bool {
+            guard shouldContinue(occurrence) else {
+                return false
+            }
+            occurrenceCount += 1
+            if occurrence >= windowStart {
+                occurrences.append(occurrence)
+            }
+            return true
+        }
+
+        switch recurrence {
+        case .once:
+            _ = record(anchor)
+        case let .daily(interval, _):
+            var offset = 0
+            while let occurrence = calendar.date(
+                byAdding: .day,
+                value: offset,
+                to: anchor
+            ), record(occurrence) {
+                offset += interval
+            }
+        case let .weekly(interval, weekdays, _):
+            guard let anchorWeek = calendar.dateInterval(
+                of: .weekOfYear,
+                for: anchor
+            )?.start else {
+                return []
+            }
+            var weekOffset = 0
+            weeklyLoop: while let week = calendar.date(
+                byAdding: .weekOfYear,
+                value: weekOffset,
+                to: anchorWeek
+            ), week < windowEnd {
+                for weekday in weekdays.sorted(by: { $0.rawValue < $1.rawValue }) {
+                    guard let occurrence = weeklyOccurrence(
+                        in: week,
+                        weekday: weekday,
+                        anchor: anchor
+                    ), occurrence >= anchor else {
+                        continue
+                    }
+                    guard record(occurrence) else {
+                        break weeklyLoop
+                    }
+                }
+                weekOffset += interval
+            }
+        case let .monthly(interval, day, _):
+            var monthOffset = 0
+            while let month = calendar.date(
+                byAdding: .month,
+                value: monthOffset,
+                to: startOfMonth(containing: anchor)
+            ), month < windowEnd {
+                if let occurrence = monthlyOccurrence(
+                    in: month,
+                    day: day,
+                    anchor: anchor
+                ), occurrence >= anchor, !record(occurrence) {
+                    break
+                }
+                monthOffset += interval
+            }
+        case let .monthlyLastDay(interval, _):
+            var monthOffset = 0
+            while let month = calendar.date(
+                byAdding: .month,
+                value: monthOffset,
+                to: startOfMonth(containing: anchor)
+            ), month < windowEnd {
+                if let lastDay = calendar.range(of: .day, in: .month, for: month)?.last,
+                   let occurrence = monthlyOccurrence(
+                       in: month,
+                       day: lastDay,
+                       anchor: anchor
+                   ),
+                   occurrence >= anchor,
+                   !record(occurrence) {
+                    break
+                }
+                monthOffset += interval
+            }
+        case let .yearly(interval, month, day, _):
+            let anchorYear = calendar.component(.year, from: anchor)
+            var yearOffset = 0
+            while let occurrenceYear = calendar.date(
+                from: DateComponents(year: anchorYear + yearOffset)
+            ), occurrenceYear < windowEnd {
+                if let occurrence = yearlyOccurrence(
+                    year: anchorYear + yearOffset,
+                    month: month,
+                    day: day,
+                    anchor: anchor
+                ), occurrence >= anchor, !record(occurrence) {
+                    break
+                }
+                yearOffset += interval
+            }
+        }
+
+        return occurrences
+    }
+
+    func content(for proposal: ReminderProposal) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = proposal.title
+        content.body = proposal.notes
+        content.sound = .default
+        return content
+    }
+
+    func weeklyOccurrence(
+        in week: Date,
+        weekday: ReminderWeekday,
+        anchor: Date
+    ) -> Date? {
+        let anchorTime = calendar.dateComponents([.hour, .minute], from: anchor)
+        var components = calendar.dateComponents(
+            [.yearForWeekOfYear, .weekOfYear],
+            from: week
+        )
+        components.weekday = weekday.rawValue
+        components.hour = anchorTime.hour
+        components.minute = anchorTime.minute
+        return calendar.date(from: components)
+    }
+
+    func startOfMonth(containing date: Date) -> Date {
+        calendar.date(
+            from: calendar.dateComponents([.year, .month], from: date)
+        )!
+    }
+
+    func monthlyOccurrence(in month: Date, day: Int, anchor: Date) -> Date? {
+        let monthComponents = calendar.dateComponents([.year, .month], from: month)
+        let anchorTime = calendar.dateComponents([.hour, .minute], from: anchor)
+        var components = monthComponents
+        components.day = day
+        components.hour = anchorTime.hour
+        components.minute = anchorTime.minute
+        guard let occurrence = calendar.date(from: components) else {
+            return nil
+        }
+        let resolved = calendar.dateComponents([.year, .month, .day], from: occurrence)
+        guard resolved.year == components.year,
+              resolved.month == components.month,
+              resolved.day == components.day else {
+            return nil
+        }
+        return occurrence
+    }
+
+    func yearlyOccurrence(
+        year: Int,
+        month: Int,
+        day: Int,
+        anchor: Date
+    ) -> Date? {
+        let anchorTime = calendar.dateComponents([.hour, .minute], from: anchor)
+        var components = DateComponents(year: year, month: month, day: day)
+        components.hour = anchorTime.hour
+        components.minute = anchorTime.minute
+        guard let occurrence = calendar.date(from: components) else {
+            return nil
+        }
+        let resolved = calendar.dateComponents([.year, .month, .day], from: occurrence)
+        guard resolved.year == year,
+              resolved.month == month,
+              resolved.day == day else {
+            return nil
+        }
+        return occurrence
+    }
+}
+
+private extension ReminderRecurrenceRule {
+    var end: ReminderRecurrenceEnd? {
+        switch self {
+        case .once:
+            nil
+        case let .daily(_, end),
+             let .weekly(_, _, end),
+             let .monthly(_, _, end),
+             let .monthlyLastDay(_, end),
+             let .yearly(_, _, _, end):
+            end
+        }
     }
 }
