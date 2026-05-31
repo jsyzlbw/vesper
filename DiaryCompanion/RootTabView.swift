@@ -26,15 +26,7 @@ struct RootTabView: View {
             }
 
             NavigationStack {
-                List {
-                    Section("AI Provider") {
-                        Text("尚未配置")
-                    }
-                    Section("权限") {
-                        Text("默认执行前确认")
-                    }
-                }
-                .navigationTitle("设置")
+                ProviderSettingsView()
             }
             .tabItem {
                 Label("设置", systemImage: "gearshape")

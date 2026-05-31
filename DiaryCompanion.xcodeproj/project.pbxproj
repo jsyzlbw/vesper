@@ -10,12 +10,14 @@
 		AA0000000000000000000001 /* DiaryCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* DiaryCompanionApp.swift */; };
 		AA0000000000000000000002 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000012 /* RootTabView.swift */; };
 		AA0000000000000000000003 /* DiaryCompanionCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000041 /* DiaryCompanionCore */; };
+		AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* ProviderSettingsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		AA0000000000000000000010 /* DiaryCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DiaryCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000011 /* DiaryCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiaryCompanionApp.swift; sourceTree = "<group>"; };
 		AA0000000000000000000012 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		AA0000000000000000000013 /* ProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +45,7 @@
 			children = (
 				AA0000000000000000000011 /* DiaryCompanionApp.swift */,
 				AA0000000000000000000012 /* RootTabView.swift */,
+				AA0000000000000000000013 /* ProviderSettingsView.swift */,
 			);
 			path = DiaryCompanion;
 			sourceTree = "<group>";
@@ -131,6 +134,7 @@
 			files = (
 				AA0000000000000000000001 /* DiaryCompanionApp.swift in Sources */,
 				AA0000000000000000000002 /* RootTabView.swift in Sources */,
+				AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
