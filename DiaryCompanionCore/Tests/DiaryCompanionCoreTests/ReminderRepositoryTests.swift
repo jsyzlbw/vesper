@@ -38,7 +38,11 @@ import Testing
         status: .scheduled,
         notificationResult: .scheduled,
         calendarResult: .permissionDenied,
-        notificationIdentifiers: ["notification-1", "notification-2"],
+        notificationIdentifiers: [
+            "notification-1",
+            "notification-2",
+            "notification-1",
+        ],
         calendarEventIdentifier: "calendar-1"
     )
 
@@ -48,6 +52,79 @@ import Testing
     #expect(fetched.calendarResult == ReminderExecutionResult.permissionDenied.rawValue)
     #expect(fetched.notificationIdentifiers == ["notification-1", "notification-2"])
     #expect(fetched.calendarEventIdentifier == "calendar-1")
+}
+
+@MainActor
+@Test func legacyReminderRecordReconstructsFixedOnceProposal() throws {
+    let repository = try makeReminderRepository()
+    let fireDate = Date(timeIntervalSince1970: 8_000)
+    let record = ReminderRecord(
+        title: "Legacy reminder",
+        body: "Legacy body",
+        fireDate: fireDate,
+        isScheduled: true
+    )
+
+    let proposal = try repository.reminderProposal(from: record)
+
+    #expect(proposal == ReminderProposal(
+        title: "Legacy reminder",
+        notes: "Legacy body",
+        start: fireDate,
+        durationMinutes: 1,
+        recurrence: .once,
+        schedulingMode: .fixed,
+        searchWindow: nil,
+        notificationEnabled: true,
+        calendarEnabled: false
+    ))
+    #expect(record.status == ReminderProposalStatus.scheduled.rawValue)
+    #expect(record.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+}
+
+@MainActor
+@Test func unscheduledLegacyReminderRecordMapsPendingExecutionDefaults() throws {
+    let repository = try makeReminderRepository()
+    let record = ReminderRecord(
+        title: "Legacy reminder",
+        body: "Legacy body",
+        fireDate: Date(timeIntervalSince1970: 8_000)
+    )
+
+    _ = try repository.reminderProposal(from: record)
+
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+}
+
+@MainActor
+@Test func reconstructingReminderRejectsPartialSearchWindow() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.searchWindowEnd = nil
+
+    #expect(throws: DiaryRepositoryError.invalidReminderSearchWindow) {
+        try repository.reminderProposal(from: record)
+    }
+}
+
+@MainActor
+@Test func reconstructingReminderValidatesPersistedDomainFields() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.durationMinutes = 0
+
+    #expect(throws: ReminderProposalValidationError.invalidDurationMinutes) {
+        try repository.reminderProposal(from: record)
+    }
 }
 
 @MainActor
@@ -87,6 +164,111 @@ import Testing
 
     let fetched = try #require(repository.fetchReminders().first)
     #expect(fetched.status == ReminderProposalStatus.cancelled.rawValue)
+}
+
+@MainActor
+@Test func resettingReminderExecutionClearsPersistedResourceState() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    try repository.updateReminderExecution(
+        id: record.id,
+        status: .scheduled,
+        notificationResult: .scheduled,
+        calendarResult: .created,
+        notificationIdentifiers: ["notification-1"],
+        calendarEventIdentifier: "calendar-1"
+    )
+
+    try repository.resetReminderExecution(id: record.id)
+
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+    #expect(record.calendarEventIdentifier == nil)
+    #expect(record.isScheduled == false)
+}
+
+@MainActor
+@Test func editingReminderWithExternalResourcesRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.notificationIdentifiers = ["notification-1"]
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.updateReminderProposal(
+            id: record.id,
+            proposal: makeFixedProposal(start: Date(timeIntervalSince1970: 5_000))
+        )
+    }
+}
+
+@MainActor
+@Test func editingExecutingReminderRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.status = ReminderProposalStatus.executing.rawValue
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.updateReminderProposal(
+            id: record.id,
+            proposal: makeFixedProposal(start: Date(timeIntervalSince1970: 5_000))
+        )
+    }
+}
+
+@MainActor
+@Test func editingScheduledReminderRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.status = ReminderProposalStatus.scheduled.rawValue
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.updateReminderProposal(
+            id: record.id,
+            proposal: makeFixedProposal(start: Date(timeIntervalSince1970: 5_000))
+        )
+    }
+}
+
+@MainActor
+@Test func cancellingReminderWithExternalResourcesRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.calendarEventIdentifier = "calendar-1"
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.cancelReminder(id: record.id)
+    }
+}
+
+@MainActor
+@Test func cancellingScheduledReminderRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.status = ReminderProposalStatus.scheduled.rawValue
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.cancelReminder(id: record.id)
+    }
 }
 
 @MainActor

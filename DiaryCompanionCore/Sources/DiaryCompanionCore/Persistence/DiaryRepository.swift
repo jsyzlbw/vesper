@@ -7,6 +7,8 @@ public enum DiaryRepositoryError: Error, Equatable, Sendable {
     case invalidReminderStatus(String)
     case invalidReminderExecutionResult(String)
     case invalidReminderRecurrenceData
+    case invalidReminderSearchWindow
+    case reminderRequiresExecutionReset(UUID)
 }
 
 @MainActor
@@ -133,10 +135,12 @@ public final class DiaryRepository {
         switch (record.searchWindowStart, record.searchWindowEnd) {
         case let (start?, end?):
             searchWindow = ReminderSearchWindow(start: start, end: end)
-        default:
+        case (nil, nil):
             searchWindow = nil
+        default:
+            throw DiaryRepositoryError.invalidReminderSearchWindow
         }
-        return ReminderProposal(
+        let proposal = ReminderProposal(
             title: record.title,
             notes: record.notes,
             start: record.firstOccurrence,
@@ -147,6 +151,8 @@ public final class DiaryRepository {
             notificationEnabled: record.notificationEnabled,
             calendarEnabled: record.calendarEnabled
         )
+        try proposal.validate()
+        return proposal
     }
 
     public func updateReminderExecution(
@@ -161,9 +167,20 @@ public final class DiaryRepository {
         record.status = status.rawValue
         record.notificationResult = notificationResult.rawValue
         record.calendarResult = calendarResult.rawValue
-        record.notificationIdentifiers = notificationIdentifiers
+        record.notificationIdentifiers = notificationIdentifiers.stableUniqued()
         record.calendarEventIdentifier = calendarEventIdentifier
         record.isScheduled = status == .scheduled
+        try context.save()
+    }
+
+    public func resetReminderExecution(id: UUID) throws {
+        let record = try reminder(id: id)
+        record.status = ReminderProposalStatus.pendingConfirmation.rawValue
+        record.notificationResult = ReminderExecutionResult.notRequested.rawValue
+        record.calendarResult = ReminderExecutionResult.notRequested.rawValue
+        record.notificationIdentifiers = []
+        record.calendarEventIdentifier = nil
+        record.isScheduled = false
         try context.save()
     }
 
@@ -173,6 +190,9 @@ public final class DiaryRepository {
     ) throws {
         try proposal.validate()
         let record = try reminder(id: id)
+        guard !record.requiresExecutionResetForEditing else {
+            throw DiaryRepositoryError.reminderRequiresExecutionReset(id)
+        }
         record.title = proposal.title
         record.body = proposal.notes
         record.fireDate = proposal.start ?? proposal.searchWindow?.start ?? .distantPast
@@ -191,6 +211,9 @@ public final class DiaryRepository {
 
     public func cancelReminder(id: UUID) throws {
         let record = try reminder(id: id)
+        guard record.canCancelDirectly else {
+            throw DiaryRepositoryError.reminderRequiresExecutionReset(id)
+        }
         record.status = ReminderProposalStatus.cancelled.rawValue
         record.isScheduled = false
         try context.save()
@@ -219,11 +242,35 @@ public final class DiaryRepository {
     }
 }
 
+private extension ReminderRecord {
+    var hasExternalResourceIdentifiers: Bool {
+        !notificationIdentifiers.isEmpty || calendarEventIdentifier != nil
+    }
+
+    var requiresExecutionResetForEditing: Bool {
+        status == ReminderProposalStatus.scheduled.rawValue
+            || status == ReminderProposalStatus.executing.rawValue
+            || hasExternalResourceIdentifiers
+    }
+
+    var canCancelDirectly: Bool {
+        status == ReminderProposalStatus.pendingConfirmation.rawValue
+            && !hasExternalResourceIdentifiers
+    }
+}
+
 private extension ReminderRecurrenceRule {
     var isRepeating: Bool {
         if case .once = self {
             return false
         }
         return true
+    }
+}
+
+private extension [String] {
+    func stableUniqued() -> [String] {
+        var seen: Set<String> = []
+        return filter { seen.insert($0).inserted }
     }
 }

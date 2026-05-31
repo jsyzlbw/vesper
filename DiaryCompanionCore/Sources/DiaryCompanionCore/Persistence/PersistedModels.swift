@@ -129,6 +129,21 @@ import SwiftData
         self.fireDate = fireDate
         self.repeats = repeats
         self.isScheduled = isScheduled
+        self.notes = body
+        self.firstOccurrence = fireDate
+        self.durationMinutes = 1
+        self.recurrenceData = (try? JSONEncoder().encode(ReminderRecurrenceRule.once))
+            ?? Data(#"{"once":{}}"#.utf8)
+        self.schedulingMode = ReminderSchedulingMode.fixed.rawValue
+        self.notificationEnabled = true
+        self.calendarEnabled = false
+        self.status = isScheduled
+            ? ReminderProposalStatus.scheduled.rawValue
+            : ReminderProposalStatus.pendingConfirmation.rawValue
+        self.notificationResult = isScheduled
+            ? ReminderExecutionResult.scheduled.rawValue
+            : ReminderExecutionResult.notRequested.rawValue
+        self.calendarResult = ReminderExecutionResult.notRequested.rawValue
     }
 
     public init(
