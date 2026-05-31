@@ -264,9 +264,10 @@ git commit -m "feat: persist reminder proposals"
 Test:
 
 - one-time reminder creates one non-repeating request
-- daily and weekday rules create repeating calendar triggers where possible
-- biweekly and last-day-of-month rules expand into concrete requests within a
-  90-day rolling window
+- daily, weekday, biweekly, and last-day-of-month rules expand into stable
+  concrete requests within a 90-day rolling window
+- repeated calls for adjacent rolling windows never change request shape or
+  create overlapping identifiers
 - notification content uses `.default` sound
 
 Use an injected Gregorian calendar and fixed `windowStart`.
@@ -290,8 +291,10 @@ public func makeRequests(
 ) throws -> [UNNotificationRequest]
 ```
 
-Use repeating triggers only for directly representable daily and weekly rules.
-Expand interval and positional rules into dated non-repeating requests.
+Expand every recurrence rule into dated non-repeating requests. This keeps
+request shape stable across app activations and makes replenishment idempotent.
+Native repeating triggers may be added later only with explicit replacement and
+revocation semantics.
 
 - [ ] **Step 4: Run tests and commit**
 
