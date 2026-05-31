@@ -54,12 +54,16 @@ public enum ReminderProposalValidationError: Error, Equatable, Sendable {
     case missingStart
     case missingSearchWindow
     case invalidSearchWindow
+    case searchWindowTooShort
     case invalidRecurrenceInterval
     case emptyWeeklyWeekdays
+    case duplicateWeeklyWeekdays
     case invalidMonthlyDay
     case invalidYearlyMonth
     case invalidYearlyDay
+    case invalidYearlyDate
     case invalidOccurrenceCount
+    case invalidRecurrenceEndDate
 }
 
 public struct ReminderProposal: Codable, Equatable, Sendable {
@@ -103,61 +107,94 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
             throw ReminderProposalValidationError.invalidDurationMinutes
         }
 
+        let anchor: Date
         switch schedulingMode {
         case .fixed:
-            guard start != nil else {
+            guard let start else {
                 throw ReminderProposalValidationError.missingStart
             }
+            anchor = start
         case .findFreeTime:
-            guard searchWindow != nil else {
+            guard let searchWindow else {
                 throw ReminderProposalValidationError.missingSearchWindow
             }
+            anchor = searchWindow.start
         }
 
         if let searchWindow, searchWindow.end <= searchWindow.start {
             throw ReminderProposalValidationError.invalidSearchWindow
         }
 
-        try recurrence.validate()
+        if schedulingMode == .findFreeTime,
+           let searchWindow,
+           searchWindow.end.timeIntervalSince(searchWindow.start)
+               < Double(durationMinutes * 60) {
+            throw ReminderProposalValidationError.searchWindowTooShort
+        }
+
+        try recurrence.validate(anchor: anchor)
     }
 }
 
 private extension ReminderRecurrenceRule {
-    func validate() throws {
+    func validate(anchor: Date) throws {
         switch self {
         case .once:
             break
         case let .daily(interval, end):
-            try validate(interval: interval, end: end)
+            try validate(interval: interval, end: end, anchor: anchor)
         case let .weekly(interval, weekdays, end):
-            try validate(interval: interval, end: end)
+            try validate(interval: interval, end: end, anchor: anchor)
             guard !weekdays.isEmpty else {
                 throw ReminderProposalValidationError.emptyWeeklyWeekdays
             }
+            guard Set(weekdays.map(\.rawValue)).count == weekdays.count else {
+                throw ReminderProposalValidationError.duplicateWeeklyWeekdays
+            }
         case let .monthly(interval, day, end):
-            try validate(interval: interval, end: end)
+            try validate(interval: interval, end: end, anchor: anchor)
             guard (1...31).contains(day) else {
                 throw ReminderProposalValidationError.invalidMonthlyDay
             }
         case let .monthlyLastDay(interval, end):
-            try validate(interval: interval, end: end)
+            try validate(interval: interval, end: end, anchor: anchor)
         case let .yearly(interval, month, day, end):
-            try validate(interval: interval, end: end)
+            try validate(interval: interval, end: end, anchor: anchor)
             guard (1...12).contains(month) else {
                 throw ReminderProposalValidationError.invalidYearlyMonth
             }
             guard (1...31).contains(day) else {
                 throw ReminderProposalValidationError.invalidYearlyDay
             }
+            guard isValidYearlyDate(month: month, day: day) else {
+                throw ReminderProposalValidationError.invalidYearlyDate
+            }
         }
     }
 
-    func validate(interval: Int, end: ReminderRecurrenceEnd?) throws {
+    func validate(
+        interval: Int,
+        end: ReminderRecurrenceEnd?,
+        anchor: Date
+    ) throws {
         guard interval > 0 else {
             throw ReminderProposalValidationError.invalidRecurrenceInterval
         }
         if case let .occurrenceCount(count) = end, count <= 0 {
             throw ReminderProposalValidationError.invalidOccurrenceCount
         }
+        if case let .date(date) = end, date < anchor {
+            throw ReminderProposalValidationError.invalidRecurrenceEndDate
+        }
+    }
+
+    func isValidYearlyDate(month: Int, day: Int) -> Bool {
+        let calendar = Calendar(identifier: .gregorian)
+        let components = DateComponents(year: 2_000, month: month, day: day)
+        guard let date = calendar.date(from: components) else {
+            return false
+        }
+        let resolved = calendar.dateComponents([.month, .day], from: date)
+        return resolved.month == month && resolved.day == day
     }
 }

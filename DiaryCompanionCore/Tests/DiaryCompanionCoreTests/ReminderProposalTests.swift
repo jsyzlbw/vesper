@@ -34,10 +34,16 @@ import Testing
     ).validate()
 }
 
+@Test func validatesYearlyLeapDayReminderProposal() throws {
+    try makeProposal(
+        recurrence: .yearly(interval: 1, month: 2, day: 29, end: nil)
+    ).validate()
+}
+
 @Test func validatesFindFreeTimeReminderProposal() throws {
     let window = ReminderSearchWindow(
         start: Date(timeIntervalSince1970: 1_000),
-        end: Date(timeIntervalSince1970: 2_000)
+        end: Date(timeIntervalSince1970: 2_800)
     )
 
     try makeProposal(
@@ -47,14 +53,16 @@ import Testing
     ).validate()
 }
 
-@Test func reminderProposalSupportsCodableRoundTrip() throws {
-    let proposal = makeProposal(
-        recurrence: .weekly(
-            interval: 2,
-            weekdays: [.monday, .wednesday],
-            end: .occurrenceCount(4)
-        )
-    )
+@Test(arguments: [
+    ReminderRecurrenceRule.once,
+    .daily(interval: 1, end: .date(Date(timeIntervalSince1970: 2_000))),
+    .weekly(interval: 2, weekdays: [.monday, .wednesday], end: .occurrenceCount(4)),
+    .monthly(interval: 1, day: 15, end: nil),
+    .monthlyLastDay(interval: 1, end: nil),
+    .yearly(interval: 1, month: 6, day: 1, end: nil),
+])
+func reminderProposalSupportsCodableRoundTrip(recurrence: ReminderRecurrenceRule) throws {
+    let proposal = makeProposal(recurrence: recurrence)
 
     let encoded = try JSONEncoder().encode(proposal)
     let decoded = try JSONDecoder().decode(ReminderProposal.self, from: encoded)
@@ -104,6 +112,22 @@ func rejectsDurationOutsideAllowedRange(durationMinutes: Int) {
     }
 }
 
+@Test func rejectsSearchWindowShorterThanDuration() {
+    let window = ReminderSearchWindow(
+        start: Date(timeIntervalSince1970: 1_000),
+        end: Date(timeIntervalSince1970: 2_800)
+    )
+
+    #expect(throws: ReminderProposalValidationError.searchWindowTooShort) {
+        try makeProposal(
+            start: nil,
+            durationMinutes: 60,
+            schedulingMode: .findFreeTime,
+            searchWindow: window
+        ).validate()
+    }
+}
+
 @Test(arguments: [
     ReminderRecurrenceRule.daily(interval: 0, end: nil),
     .weekly(interval: 0, weekdays: [.monday], end: nil),
@@ -121,6 +145,14 @@ func rejectsNonPositiveRecurrenceInterval(recurrence: ReminderRecurrenceRule) {
     #expect(throws: ReminderProposalValidationError.emptyWeeklyWeekdays) {
         try makeProposal(
             recurrence: .weekly(interval: 1, weekdays: [], end: nil)
+        ).validate()
+    }
+}
+
+@Test func rejectsWeeklyReminderWithDuplicateWeekdays() {
+    #expect(throws: ReminderProposalValidationError.duplicateWeeklyWeekdays) {
+        try makeProposal(
+            recurrence: .weekly(interval: 1, weekdays: [.monday, .monday], end: nil)
         ).validate()
     }
 }
@@ -152,10 +184,51 @@ func rejectsYearlyDayOutsideAllowedRange(day: Int) {
     }
 }
 
+@Test(arguments: [
+    ReminderRecurrenceRule.yearly(interval: 1, month: 2, day: 30, end: nil),
+    .yearly(interval: 1, month: 4, day: 31, end: nil),
+])
+func rejectsImpossibleYearlyDate(recurrence: ReminderRecurrenceRule) {
+    #expect(throws: ReminderProposalValidationError.invalidYearlyDate) {
+        try makeProposal(recurrence: recurrence).validate()
+    }
+}
+
 @Test func rejectsNonPositiveOccurrenceCount() {
     #expect(throws: ReminderProposalValidationError.invalidOccurrenceCount) {
         try makeProposal(
             recurrence: .daily(interval: 1, end: .occurrenceCount(0))
+        ).validate()
+    }
+}
+
+@Test func rejectsRecurrenceEndDateBeforeFixedStart() {
+    #expect(throws: ReminderProposalValidationError.invalidRecurrenceEndDate) {
+        try makeProposal(
+            start: Date(timeIntervalSince1970: 1_000),
+            recurrence: .daily(
+                interval: 1,
+                end: .date(Date(timeIntervalSince1970: 999))
+            )
+        ).validate()
+    }
+}
+
+@Test func rejectsRecurrenceEndDateBeforeFindFreeTimeWindowStart() {
+    let window = ReminderSearchWindow(
+        start: Date(timeIntervalSince1970: 1_000),
+        end: Date(timeIntervalSince1970: 4_600)
+    )
+
+    #expect(throws: ReminderProposalValidationError.invalidRecurrenceEndDate) {
+        try makeProposal(
+            start: nil,
+            recurrence: .daily(
+                interval: 1,
+                end: .date(Date(timeIntervalSince1970: 999))
+            ),
+            schedulingMode: .findFreeTime,
+            searchWindow: window
         ).validate()
     }
 }
