@@ -175,6 +175,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = DiaryCompanion;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "读取已有日程并在你确认后创建提醒事件。";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "在你确认后将提醒写入系统日历。";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -194,6 +196,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = DiaryCompanion;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "读取已有日程并在你确认后创建提醒事件。";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "在你确认后将提醒写入系统日历。";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
