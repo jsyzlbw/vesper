@@ -533,6 +533,8 @@ Assert:
 - `findFreeTime` loads busy intervals from all visible calendars
 - earliest available slot replaces the proposal start
 - proposal search window comes from the decoded AI envelope
+- selected slot matches the recurrence rule before it becomes the first
+  occurrence
 - denied read access returns a clarification state
 - no slot returns a clarification state
 
@@ -546,9 +548,11 @@ swift test --package-path DiaryCompanionCore --filter ReminderAutoSchedulingTest
 
 Before displaying a final card for `findFreeTime`, request EventKit read access,
 load visible-calendar intervals for the proposal search window, run
-`CalendarAvailabilityService`, and persist the selected start. If access is
-denied or no slot exists, persist no proposal and append a natural-language
-clarification message.
+`CalendarAvailabilityService`, filter candidate slots against the recurrence
+rule, assign the selected start, and validate it as the concrete first
+occurrence before persistence. If access is denied or no recurrence-compatible
+slot exists, persist no proposal and append a natural-language clarification
+message.
 
 - [ ] **Step 4: Run full verification**
 
