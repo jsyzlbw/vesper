@@ -9,9 +9,14 @@ let package = Package(
     ],
     products: [
         .library(name: "DiaryCompanionCore", targets: ["DiaryCompanionCore"]),
+        .executable(name: "DeepSeekSmoke", targets: ["DeepSeekSmoke"]),
     ],
     targets: [
         .target(name: "DiaryCompanionCore"),
+        .executableTarget(
+            name: "DeepSeekSmoke",
+            dependencies: ["DiaryCompanionCore"]
+        ),
         .testTarget(
             name: "DiaryCompanionCoreTests",
             dependencies: ["DiaryCompanionCore"]
