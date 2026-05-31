@@ -100,6 +100,62 @@ import Testing
 }
 
 @MainActor
+@Test func migratedLegacyReminderRecordReconstructsFromOldFields() throws {
+    let repository = try makeReminderRepository()
+    let fireDate = Date(timeIntervalSince1970: 8_000)
+    let record = makeMigratedLegacyReminderRecord(
+        fireDate: fireDate,
+        isScheduled: true
+    )
+
+    let proposal = try repository.reminderProposal(from: record)
+
+    #expect(proposal == ReminderProposal(
+        title: "Migrated legacy reminder",
+        notes: "Migrated legacy body",
+        start: fireDate,
+        durationMinutes: 1,
+        recurrence: .once,
+        schedulingMode: .fixed,
+        searchWindow: nil,
+        notificationEnabled: true,
+        calendarEnabled: false
+    ))
+    #expect(record.status == ReminderProposalStatus.scheduled.rawValue)
+    #expect(record.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+}
+
+@MainActor
+@Test func migratedUnscheduledLegacyReminderMapsPendingExecutionDefaults() throws {
+    let repository = try makeReminderRepository()
+    let record = makeMigratedLegacyReminderRecord(
+        fireDate: Date(timeIntervalSince1970: 8_000),
+        isScheduled: false
+    )
+
+    _ = try repository.reminderProposal(from: record)
+
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+}
+
+@MainActor
+@Test func emptyRecurrenceDataWithNewProposalFieldsIsNotLegacy() throws {
+    let repository = try makeReminderRepository()
+    let record = makeMigratedLegacyReminderRecord(
+        fireDate: Date(timeIntervalSince1970: 8_000),
+        isScheduled: false
+    )
+    record.durationMinutes = 30
+
+    #expect(throws: DiaryRepositoryError.invalidReminderRecurrenceData) {
+        try repository.reminderProposal(from: record)
+    }
+}
+
+@MainActor
 @Test func reconstructingReminderRejectsPartialSearchWindow() throws {
     let repository = try makeReminderRepository()
     let record = try repository.createReminderProposal(
@@ -332,6 +388,34 @@ private func makeReminderRepository() throws -> DiaryRepository {
 }
 
 @MainActor private var retainedReminderContainers: [ModelContainer] = []
+
+private func makeMigratedLegacyReminderRecord(
+    fireDate: Date,
+    isScheduled: Bool
+) -> ReminderRecord {
+    let record = ReminderRecord(
+        title: "Migrated legacy reminder",
+        body: "Migrated legacy body",
+        fireDate: fireDate,
+        isScheduled: isScheduled
+    )
+    record.notes = ""
+    record.firstOccurrence = nil
+    record.durationMinutes = 0
+    record.recurrenceData = Data()
+    record.schedulingMode = ReminderSchedulingMode.fixed.rawValue
+    record.searchWindowStart = nil
+    record.searchWindowEnd = nil
+    record.notificationEnabled = false
+    record.calendarEnabled = false
+    record.status = ReminderProposalStatus.pendingConfirmation.rawValue
+    record.notificationResult = ReminderExecutionResult.notRequested.rawValue
+    record.calendarResult = ReminderExecutionResult.notRequested.rawValue
+    record.sourceMessageID = nil
+    record.notificationIdentifiers = []
+    record.calendarEventIdentifier = nil
+    return record
+}
 
 private func makeFindFreeTimeProposal() -> ReminderProposal {
     ReminderProposal(

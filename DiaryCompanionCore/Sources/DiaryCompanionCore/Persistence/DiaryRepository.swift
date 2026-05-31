@@ -114,6 +114,9 @@ public final class DiaryRepository {
     }
 
     public func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal {
+        if record.hasMigratedLegacyDefaults {
+            return try reconstructMigratedLegacyReminder(from: record)
+        }
         guard ReminderProposalStatus(rawValue: record.status) != nil else {
             throw DiaryRepositoryError.invalidReminderStatus(record.status)
         }
@@ -173,7 +176,7 @@ public final class DiaryRepository {
         try context.save()
     }
 
-    public func resetReminderExecution(id: UUID) throws {
+    func resetReminderExecution(id: UUID) throws {
         let record = try reminder(id: id)
         record.status = ReminderProposalStatus.pendingConfirmation.rawValue
         record.notificationResult = ReminderExecutionResult.notRequested.rawValue
@@ -240,9 +243,61 @@ public final class DiaryRepository {
             throw DiaryRepositoryError.invalidReminderExecutionResult(rawValue)
         }
     }
+
+    private func reconstructMigratedLegacyReminder(
+        from record: ReminderRecord
+    ) throws -> ReminderProposal {
+        let recurrence = ReminderRecurrenceRule.once
+        let status: ReminderProposalStatus = record.isScheduled
+            ? .scheduled
+            : .pendingConfirmation
+        let notificationResult: ReminderExecutionResult = record.isScheduled
+            ? .scheduled
+            : .notRequested
+        let proposal = ReminderProposal(
+            title: record.title,
+            notes: record.body,
+            start: record.fireDate,
+            durationMinutes: 1,
+            recurrence: recurrence,
+            schedulingMode: .fixed,
+            searchWindow: nil,
+            notificationEnabled: true,
+            calendarEnabled: false
+        )
+        try proposal.validate()
+
+        record.notes = proposal.notes
+        record.firstOccurrence = proposal.start
+        record.durationMinutes = proposal.durationMinutes
+        record.recurrenceData = try JSONEncoder().encode(recurrence)
+        record.notificationEnabled = proposal.notificationEnabled
+        record.status = status.rawValue
+        record.notificationResult = notificationResult.rawValue
+        try context.save()
+        return proposal
+    }
 }
 
 private extension ReminderRecord {
+    var hasMigratedLegacyDefaults: Bool {
+        recurrenceData.isEmpty
+            && notes.isEmpty
+            && firstOccurrence == nil
+            && durationMinutes == 0
+            && schedulingMode == ReminderSchedulingMode.fixed.rawValue
+            && searchWindowStart == nil
+            && searchWindowEnd == nil
+            && notificationEnabled == false
+            && calendarEnabled == false
+            && status == ReminderProposalStatus.pendingConfirmation.rawValue
+            && notificationResult == ReminderExecutionResult.notRequested.rawValue
+            && calendarResult == ReminderExecutionResult.notRequested.rawValue
+            && sourceMessageID == nil
+            && notificationIdentifiers.isEmpty
+            && calendarEventIdentifier == nil
+    }
+
     var hasExternalResourceIdentifiers: Bool {
         !notificationIdentifiers.isEmpty || calendarEventIdentifier != nil
     }
