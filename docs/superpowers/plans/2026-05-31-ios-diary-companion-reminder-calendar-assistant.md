@@ -241,7 +241,8 @@ public func updateReminderExecution(
     notificationResult: ReminderExecutionResult,
     calendarResult: ReminderExecutionResult,
     notificationIdentifiers: [String],
-    calendarEventIdentifier: String?
+    calendarEventIdentifier: String?,
+    calendarExternalIdentifier: String?
 ) throws
 ```
 
@@ -409,16 +410,19 @@ public protocol ReminderNotificationScheduling: Sendable {
 
 public protocol ReminderCalendarScheduling: Sendable {
     func requestFullAccess() async throws -> Bool
-    func createEvent(for proposal: ReminderProposal) async throws -> String
-    func removeEvent(identifier: String) throws
+    func createEvent(for proposal: ReminderProposal) async throws -> CalendarEventReference
+    func removeEvent(reference: CalendarEventReference) throws
 }
 ```
 
 Implement `confirm(reminderID:)` so each output is attempted separately and the
 repository is updated with partial results. Add coordinator edit and cancel
 paths that remove previously scheduled notification identifiers and EventKit
-events before resetting repository execution state. Repository methods must not
-silently edit or cancel records while external resources are still attached.
+events before resetting repository execution state. Persist both EventKit
+identifiers so removal can fall back to
+`calendarItems(withExternalIdentifier:)` if moving an event between calendars
+invalidates its primary identifier. Repository methods must not silently edit
+or cancel records while external resources are still attached.
 
 - [ ] **Step 4: Run tests and commit**
 
