@@ -50,6 +50,15 @@ import Testing
     #expect(custom.url?.absoluteString == "https://example.com/proxy/v1/chat/completions")
 }
 
+@Test func resolvesDeepSeekBaseURLToChatCompletionsEndpoint() throws {
+    let endpoint = try ProviderRequestFactory().endpointURL(
+        for: try profile(.deepSeek, modelName: "deepseek-v4-flash")
+    )
+
+    #expect(ProviderPreset.deepSeek.defaultBaseURL?.absoluteString == "https://api.deepseek.com")
+    #expect(endpoint.absoluteString == "https://api.deepseek.com/chat/completions")
+}
+
 @Test func buildsAnthropicMessagesRequest() throws {
     let request = try ProviderRequestFactory().makeStreamingRequest(
         profile: try profile(.anthropic, modelName: "claude-sonnet-4-20250514"),

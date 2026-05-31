@@ -19,6 +19,19 @@ public struct ChatMessage: Codable, Equatable, Sendable {
 public struct ProviderRequestFactory: Sendable {
     public init() {}
 
+    public func endpointURL(for profile: ProviderProfile) throws -> URL {
+        switch profile.protocolKind {
+        case .openAI, .openAICompatible:
+            profile.baseURL
+                .appendingPathComponent("chat")
+                .appendingPathComponent("completions")
+        case .anthropic:
+            profile.baseURL.appendingPathComponent("messages")
+        case .gemini:
+            try geminiEndpointURL(profile: profile)
+        }
+    }
+
     public func makeStreamingRequest(
         profile: ProviderProfile,
         apiKey: String,
@@ -54,9 +67,7 @@ public struct ProviderRequestFactory: Sendable {
         messages: [ChatMessage]
     ) throws -> URLRequest {
         var request = makeJSONRequest(
-            url: profile.baseURL
-                .appendingPathComponent("chat")
-                .appendingPathComponent("completions")
+            url: try endpointURL(for: profile)
         )
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try encode(
@@ -76,7 +87,7 @@ public struct ProviderRequestFactory: Sendable {
         maxOutputTokens: Int
     ) throws -> URLRequest {
         var request = makeJSONRequest(
-            url: profile.baseURL.appendingPathComponent("messages")
+            url: try endpointURL(for: profile)
         )
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
@@ -97,14 +108,7 @@ public struct ProviderRequestFactory: Sendable {
         apiKey: String,
         messages: [ChatMessage]
     ) throws -> URLRequest {
-        let modelName = profile.modelName.removingPrefix("models/")
-        let endpoint = profile.baseURL
-            .appendingPathComponent("models")
-            .appendingPathComponent("\(modelName):streamGenerateContent")
-        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "alt", value: "sse")]
-
-        var request = makeJSONRequest(url: try requiredURL(from: components))
+        var request = makeJSONRequest(url: try endpointURL(for: profile))
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try encode(
             GeminiPayload(
@@ -138,6 +142,16 @@ public struct ProviderRequestFactory: Sendable {
             throw ProviderRequestError.invalidURL
         }
         return url
+    }
+
+    private func geminiEndpointURL(profile: ProviderProfile) throws -> URL {
+        let modelName = profile.modelName.removingPrefix("models/")
+        let endpoint = profile.baseURL
+            .appendingPathComponent("models")
+            .appendingPathComponent("\(modelName):streamGenerateContent")
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "alt", value: "sse")]
+        return try requiredURL(from: components)
     }
 
     private func encode(_ payload: some Encodable) throws -> Data {

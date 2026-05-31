@@ -101,6 +101,8 @@ private struct ProviderProfileFormView: View {
     @State private var apiKey = ""
     @State private var isEnabled = true
     @State private var validationMessage: String?
+    @State private var connectionMessage: String?
+    @State private var isTestingConnection = false
 
     let onSave: (ProviderProfile, String) throws -> Void
 
@@ -113,9 +115,15 @@ private struct ProviderProfileFormView: View {
                     }
                 }
                 TextField("显示名称", text: $displayName)
-                TextField("Base URL", text: $baseURL)
+                TextField("Base URL（基础地址）", text: $baseURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                LabeledContent("实际 Endpoint") {
+                    Text(endpointPreview)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
                 TextField("模型名称", text: $modelName)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -123,6 +131,27 @@ private struct ProviderProfileFormView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Toggle("启用", isOn: $isEnabled)
+            }
+
+            Section {
+                Button(action: testConnection) {
+                    HStack {
+                        Text("测试连接")
+                        Spacer()
+                        if isTestingConnection {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isTestingConnection)
+
+                if let connectionMessage {
+                    Text(connectionMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } footer: {
+                Text("Base URL 是服务基础地址。应用会自动追加平台对应路径，例如 DeepSeek 会请求 /chat/completions。")
             }
 
             if let validationMessage {
@@ -147,28 +176,89 @@ private struct ProviderProfileFormView: View {
         .onChange(of: selectedPreset) { _, preset in
             displayName = preset.displayName
             baseURL = preset.defaultBaseURL?.absoluteString ?? ""
+            connectionMessage = nil
         }
     }
 
     private func save() {
         do {
-            let name = try required(displayName, field: "显示名称")
-            let urlString = try required(baseURL, field: "Base URL")
-            let url = try validBaseURL(urlString)
-            let model = try required(modelName, field: "模型名称")
+            let profile = try makeProfile()
             let key = try required(apiKey, field: "API Key")
-            let profile = ProviderProfile(
-                displayName: name,
-                preset: selectedPreset,
-                baseURL: url,
-                modelName: model,
-                isEnabled: isEnabled
-            )
             try onSave(profile, key)
             dismiss()
         } catch {
             validationMessage = error.localizedDescription
         }
+    }
+
+    private func testConnection() {
+        guard !isTestingConnection else {
+            return
+        }
+        do {
+            let profile = try makeProfile()
+            let key = try required(apiKey, field: "API Key")
+            validationMessage = nil
+            connectionMessage = nil
+            isTestingConnection = true
+
+            Task {
+                do {
+                    let result = try await ProviderConnectionTester().test(
+                        profile: profile,
+                        apiKey: key
+                    )
+                    await MainActor.run {
+                        connectionMessage = "连接成功：\(result.preview)"
+                        isTestingConnection = false
+                    }
+                } catch {
+                    await MainActor.run {
+                        connectionMessage = "连接失败：\(error.localizedDescription)"
+                        isTestingConnection = false
+                    }
+                }
+            }
+        } catch {
+            validationMessage = error.localizedDescription
+        }
+    }
+
+    private var endpointPreview: String {
+        do {
+            return try ProviderRequestFactory()
+                .endpointURL(
+                    for: makeProfile(
+                        requireAPIKey: false,
+                        requireModel: false
+                    )
+                )
+                .absoluteString
+        } catch {
+            return "请先填写有效配置"
+        }
+    }
+
+    private func makeProfile(
+        requireAPIKey: Bool = true,
+        requireModel: Bool = true
+    ) throws -> ProviderProfile {
+        let name = try required(displayName, field: "显示名称")
+        let urlString = try required(baseURL, field: "Base URL")
+        let url = try validBaseURL(urlString)
+        let model = requireModel
+            ? try required(modelName, field: "模型名称")
+            : modelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if requireAPIKey {
+            _ = try required(apiKey, field: "API Key")
+        }
+        return ProviderProfile(
+            displayName: name,
+            preset: selectedPreset,
+            baseURL: url,
+            modelName: model.isEmpty ? "{model}" : model,
+            isEnabled: isEnabled
+        )
     }
 
     private func required(_ value: String, field: String) throws -> String {
