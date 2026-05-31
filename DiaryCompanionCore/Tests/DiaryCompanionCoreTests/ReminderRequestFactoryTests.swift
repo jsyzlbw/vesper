@@ -105,6 +105,30 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
     ])
 }
 
+@Test func ordersWeeklyConcreteOccurrencesByDateForMondayFirstCalendar() throws {
+    var calendar = utcCalendar
+    calendar.firstWeekday = 2
+    let requests = try ReminderRequestFactory(calendar: calendar).makeRequests(
+        reminderID: reminderID,
+        proposal: makeProposal(
+            start: date(2026, 1, 5, 9),
+            recurrence: .weekly(
+                interval: 1,
+                weekdays: [.sunday, .monday],
+                end: .occurrenceCount(3)
+            )
+        ),
+        windowStart: date(2026, 1, 1),
+        windowDays: 20
+    )
+
+    #expect(try requests.map(fireDate) == [
+        date(2026, 1, 5, 9),
+        date(2026, 1, 11, 9),
+        date(2026, 1, 12, 9),
+    ])
+}
+
 @Test func expandsMonthlyLastDayAcrossFebruaryLengths() throws {
     let leapYear = try makeRequests(
         start: date(2024, 1, 31, 9),

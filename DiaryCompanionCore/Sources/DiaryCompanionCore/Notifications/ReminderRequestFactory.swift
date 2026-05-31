@@ -214,14 +214,14 @@ private extension ReminderRequestFactory {
                 value: weekOffset,
                 to: anchorWeek
             ), week < windowEnd {
-                for weekday in weekdays.sorted(by: { $0.rawValue < $1.rawValue }) {
-                    guard let occurrence = weeklyOccurrence(
+                let weeklyOccurrences = weekdays.compactMap { weekday in
+                    weeklyOccurrence(
                         in: week,
                         weekday: weekday,
                         anchor: anchor
-                    ), occurrence >= anchor else {
-                        continue
-                    }
+                    )
+                }.filter { $0 >= anchor }.sorted()
+                for occurrence in weeklyOccurrences {
                     guard record(occurrence) else {
                         break weeklyLoop
                     }
