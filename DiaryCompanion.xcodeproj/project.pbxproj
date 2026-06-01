@@ -12,6 +12,7 @@
 		AA0000000000000000000003 /* DiaryCompanionCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000041 /* DiaryCompanionCore */; };
 		AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* ProviderSettingsView.swift */; };
 		AA0000000000000000000005 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000014 /* ChatView.swift */; };
+		AA0000000000000000000006 /* ReminderProposalCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* ReminderProposalCard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		AA0000000000000000000012 /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000013 /* ProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSettingsView.swift; sourceTree = "<group>"; };
 		AA0000000000000000000014 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		AA0000000000000000000015 /* ReminderProposalCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderProposalCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +51,7 @@
 				AA0000000000000000000012 /* RootTabView.swift */,
 				AA0000000000000000000013 /* ProviderSettingsView.swift */,
 				AA0000000000000000000014 /* ChatView.swift */,
+				AA0000000000000000000015 /* ReminderProposalCard.swift */,
 			);
 			path = DiaryCompanion;
 			sourceTree = "<group>";
@@ -139,6 +142,7 @@
 				AA0000000000000000000002 /* RootTabView.swift in Sources */,
 				AA0000000000000000000004 /* ProviderSettingsView.swift in Sources */,
 				AA0000000000000000000005 /* ChatView.swift in Sources */,
+				AA0000000000000000000006 /* ReminderProposalCard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

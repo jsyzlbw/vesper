@@ -6,6 +6,8 @@ struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \MessageRecord.createdAt)
     private var messages: [MessageRecord]
+    @Query(sort: \ReminderRecord.fireDate)
+    private var reminders: [ReminderRecord]
     @State private var draft = ""
     @State private var isSending = false
     @State private var statusText: String?
@@ -24,7 +26,16 @@ struct ChatView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(visibleMessages) { message in
-                                ChatBubble(message: message)
+                                VStack(alignment: .leading, spacing: 9) {
+                                    if !message.content.isEmpty {
+                                        ChatBubble(message: message)
+                                    }
+                                    ForEach(reminders(for: message.id)) { reminder in
+                                        ReminderProposalCard(reminder: reminder) { action in
+                                            handle(action, for: reminder)
+                                        }
+                                    }
+                                }
                                     .id(message.id)
                             }
                             if let statusText {
@@ -137,8 +148,10 @@ struct ChatView: View {
                 messages: requestMessages
             )
             var assistantMessageID: UUID?
+            var reminderBuffer = ReminderProposalStreamBuffer()
 
             statusText = "正在生成回复"
+            streamLoop:
             for try await event in stream {
                 switch event {
                 case let .textDelta(delta):
@@ -149,14 +162,36 @@ struct ChatView: View {
                             content: ""
                         ).id
                     }
-                    try conversationRepository.appendContent(
-                        delta,
-                        to: assistantMessageID!
+                    reminderBuffer.append(delta)
+                    try conversationRepository.replaceContent(
+                        reminderBuffer.visibleText,
+                        of: assistantMessageID!
                     )
                 case .reasoningDelta:
                     statusText = "正在思考"
                 case .done:
-                    return
+                    break streamLoop
+                }
+            }
+            reminderBuffer.finish()
+            if let assistantMessageID {
+                let parseResult = try ReminderProposalEnvelopeParser().parse(
+                    reminderBuffer.rawText
+                )
+                try conversationRepository.replaceContent(
+                    parseResult.visibleText,
+                    of: assistantMessageID
+                )
+                if let proposal = parseResult.proposal {
+                    let diaryRepository = DiaryRepository(context: modelContext)
+                    if try diaryRepository.fetchReminders(
+                        sourceMessageID: assistantMessageID
+                    ).isEmpty {
+                        try diaryRepository.createReminderProposal(
+                            proposal,
+                            sourceMessageID: assistantMessageID
+                        )
+                    }
                 }
             }
         } catch {
@@ -168,7 +203,10 @@ struct ChatView: View {
         var result = [
             ChatMessage(
                 role: .system,
-                content: "你是一个简洁可靠的个人日记助手。请使用中文回答。"
+                content: """
+                你是一个简洁可靠的个人日记助手。请使用中文回答。
+                \(ReminderAssistantPrompt.systemInstruction)
+                """
             ),
         ]
         for record in records where !record.content.isEmpty {
@@ -186,6 +224,32 @@ struct ChatView: View {
         }
         withAnimation {
             proxy.scrollTo(id, anchor: .bottom)
+        }
+    }
+
+    private func reminders(for messageID: UUID) -> [ReminderRecord] {
+        reminders.filter { $0.sourceMessageID == messageID }
+    }
+
+    private func handle(_ action: ReminderCardAction, for reminder: ReminderRecord) {
+        Task { @MainActor in
+            do {
+                let coordinator = ReminderSchedulingCoordinator(
+                    repository: DiaryRepository(context: modelContext),
+                    notificationClient: UserNotificationCenterClient(),
+                    calendarClient: EventKitCalendarClient()
+                )
+                switch action {
+                case .confirm:
+                    try await coordinator.confirm(reminderID: reminder.id)
+                case .cancel:
+                    try coordinator.cancel(reminderID: reminder.id)
+                case .recover:
+                    try coordinator.recoverInterruptedExecution(reminderID: reminder.id)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
