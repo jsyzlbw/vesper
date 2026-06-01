@@ -88,6 +88,8 @@ AlarmKit output follows the same rolling-window policy as notifications: expand 
 
 On older systems, the production client throws a readable `alarmRequiresIOS26` error if an alarm is requested. No ordinary notification is created as an implicit substitute.
 
+Add a localized `NSAlarmKitUsageDescription` privacy string. AlarmKit refuses to schedule alarms when this key is absent or empty.
+
 ## Persistence
 
 Persist:

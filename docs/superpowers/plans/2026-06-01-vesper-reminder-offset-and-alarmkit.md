@@ -339,6 +339,8 @@ git commit -m "feat: persist and coordinate alarm outputs"
 
 **Files:**
 - Create: `DiaryCompanion/AlarmKitAlarmClient.swift`
+- Modify: `DiaryCompanion/en.lproj/InfoPlist.strings`
+- Modify: `DiaryCompanion/zh-Hans.lproj/InfoPlist.strings`
 - Modify: `DiaryCompanion.xcodeproj/project.pbxproj`
 - Test: build verification with `xcodebuild`
 
@@ -380,7 +382,17 @@ Use deterministic UUID identifiers derived from reminder ID and fire date so ret
 
 Construct `UnavailableAlarmClient()` on iOS versions earlier than 26. It throws `AlarmClientError.alarmRequiresIOS26` only when an alarm is requested.
 
-- [ ] **Step 3: Build and commit**
+- [ ] **Step 3: Add AlarmKit privacy usage text**
+
+Add the generated Info.plist key:
+
+```text
+INFOPLIST_KEY_NSAlarmKitUsageDescription = "Vesper schedules alarms only after you confirm.";
+```
+
+Add localized `NSAlarmKitUsageDescription` values to the English and Simplified Chinese `InfoPlist.strings` files. This key is required: AlarmKit refuses to schedule alarms when it is absent or empty.
+
+- [ ] **Step 4: Build and commit**
 
 Run:
 
