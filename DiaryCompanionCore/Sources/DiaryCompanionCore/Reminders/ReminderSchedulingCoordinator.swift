@@ -31,6 +31,7 @@ public final class ReminderSchedulingCoordinator {
     private let repository: any ReminderPersistence
     private let notificationClient: ReminderNotificationClient
     private let calendarClient: CalendarClient
+    private let cleanupJournal: any ReminderCleanupJournaling
     private let makeRequests: RequestFactory
     private let now: () -> Date
 
@@ -38,12 +39,14 @@ public final class ReminderSchedulingCoordinator {
         repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
         calendarClient: CalendarClient,
+        cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: ReminderRequestFactory = ReminderRequestFactory(),
         now: @escaping () -> Date = Date.init
     ) {
         self.repository = repository
         self.notificationClient = notificationClient
         self.calendarClient = calendarClient
+        self.cleanupJournal = cleanupJournal
         makeRequests = { reminderID, proposal, windowStart in
             try requestFactory.makeRequests(
                 reminderID: reminderID,
@@ -58,12 +61,14 @@ public final class ReminderSchedulingCoordinator {
         repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
         calendarClient: CalendarClient,
+        cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: @escaping RequestFactory,
         now: @escaping () -> Date = Date.init
     ) {
         self.repository = repository
         self.notificationClient = notificationClient
         self.calendarClient = calendarClient
+        self.cleanupJournal = cleanupJournal
         makeRequests = requestFactory
         self.now = now
     }
@@ -105,6 +110,19 @@ public final class ReminderSchedulingCoordinator {
                     try Task.checkCancellation()
                     try await notificationClient.add(requests)
                     notificationIdentifiers = requests.map(\.identifier)
+                    do {
+                        try saveCleanupJournal(
+                            reminderID: reminderID,
+                            notificationIdentifiers: notificationIdentifiers,
+                            calendarReference: calendarReference
+                        )
+                    } catch {
+                        notificationClient.removePendingRequests(
+                            withIdentifiers: notificationIdentifiers
+                        )
+                        notificationIdentifiers = []
+                        throw error
+                    }
                     try Task.checkCancellation()
                     notificationResult = .scheduled
                 } else {
@@ -152,6 +170,24 @@ public final class ReminderSchedulingCoordinator {
                 if isAuthorized {
                     try Task.checkCancellation()
                     calendarReference = try await calendarClient.createEvent(for: proposal)
+                    do {
+                        try saveCleanupJournal(
+                            reminderID: reminderID,
+                            notificationIdentifiers: notificationIdentifiers,
+                            calendarReference: calendarReference
+                        )
+                    } catch {
+                        guard let createdReference = calendarReference else {
+                            throw error
+                        }
+                        do {
+                            try calendarClient.removeEvent(reference: createdReference)
+                            calendarReference = nil
+                        } catch {
+                            throw ReminderSchedulingCoordinatorError.cleanupFailed
+                        }
+                        throw error
+                    }
                     try Task.checkCancellation()
                     calendarResult = .created
                 } else {
@@ -181,6 +217,7 @@ public final class ReminderSchedulingCoordinator {
                 notificationIdentifiers: notificationIdentifiers,
                 calendarReference: calendarReference
             )
+            try cleanupJournal.remove(reminderID: reminderID)
         } catch {
             try compensate(
                 reminderID: reminderID,
@@ -197,16 +234,18 @@ public final class ReminderSchedulingCoordinator {
         try proposal.validate()
         let record = try repository.reminder(id: reminderID)
         try rejectExecuting(record)
-        try removeOutputs(for: record)
+        try removeOutputs(for: record, reminderID: reminderID)
         try repository.resetReminderExecution(id: reminderID)
+        try cleanupJournal.remove(reminderID: reminderID)
         try repository.updateReminderProposal(id: reminderID, proposal: proposal)
     }
 
     public func cancel(reminderID: UUID) throws {
         let record = try repository.reminder(id: reminderID)
         try rejectExecuting(record)
-        try removeOutputs(for: record)
+        try removeOutputs(for: record, reminderID: reminderID)
         try repository.resetReminderExecution(id: reminderID)
+        try cleanupJournal.remove(reminderID: reminderID)
         try repository.cancelReminder(id: reminderID)
     }
 
@@ -216,8 +255,21 @@ public final class ReminderSchedulingCoordinator {
         guard status == .executing else {
             throw ReminderSchedulingCoordinatorError.invalidStatus(status)
         }
-        try removeOutputs(for: record)
+        if try cleanupJournal.load(reminderID: reminderID) == nil {
+            try saveCleanupJournal(
+                reminderID: reminderID,
+                notificationIdentifiers: record.notificationIdentifiers,
+                calendarReference: record.calendarEventIdentifier.map {
+                    CalendarEventReference(
+                        eventIdentifier: $0,
+                        externalIdentifier: record.calendarExternalIdentifier
+                    )
+                }
+            )
+        }
+        try removeOutputs(for: record, reminderID: reminderID)
         try repository.resetReminderExecution(id: reminderID)
+        try cleanupJournal.remove(reminderID: reminderID)
     }
 
     private func rejectExecuting(_ record: ReminderRecord) throws {
@@ -234,17 +286,24 @@ public final class ReminderSchedulingCoordinator {
         return status
     }
 
-    private func removeOutputs(for record: ReminderRecord) throws {
-        if let identifier = record.calendarEventIdentifier {
+    private func removeOutputs(for record: ReminderRecord, reminderID: UUID) throws {
+        let journalEntry = try cleanupJournal.load(reminderID: reminderID)
+        let recordReference = record.calendarEventIdentifier.map {
+            CalendarEventReference(
+                eventIdentifier: $0,
+                externalIdentifier: record.calendarExternalIdentifier
+            )
+        }
+        if let reference = journalEntry?.calendarReference ?? recordReference {
             try calendarClient.removeEvent(
-                reference: CalendarEventReference(
-                    eventIdentifier: identifier,
-                    externalIdentifier: record.calendarExternalIdentifier
-                )
+                reference: reference
             )
         }
         notificationClient.removePendingRequests(
-            withIdentifiers: record.notificationIdentifiers
+            withIdentifiers: stableUniqued(
+                record.notificationIdentifiers
+                    + (journalEntry?.notificationIdentifiers ?? [])
+            )
         )
     }
 
@@ -275,6 +334,7 @@ public final class ReminderSchedulingCoordinator {
         calendarReference: CalendarEventReference?
     ) throws {
         let record = try? repository.reminder(id: reminderID)
+        let journalEntry = try? cleanupJournal.load(reminderID: reminderID)
         let persistedCalendarReference = record?.calendarEventIdentifier.map {
             CalendarEventReference(
                 eventIdentifier: $0,
@@ -282,9 +342,18 @@ public final class ReminderSchedulingCoordinator {
             )
         }
         let identifiers = stableUniqued(
-            notificationIdentifiers + (record?.notificationIdentifiers ?? [])
+            notificationIdentifiers
+                + (record?.notificationIdentifiers ?? [])
+                + (journalEntry?.notificationIdentifiers ?? [])
         )
-        let recoveryReference = calendarReference ?? persistedCalendarReference
+        let recoveryReference = calendarReference
+            ?? journalEntry?.calendarReference
+            ?? persistedCalendarReference
+        try saveCleanupJournal(
+            reminderID: reminderID,
+            notificationIdentifiers: identifiers,
+            calendarReference: recoveryReference
+        )
         try? persist(
             reminderID: reminderID,
             status: .executing,
@@ -308,6 +377,24 @@ public final class ReminderSchedulingCoordinator {
             throw ReminderSchedulingCoordinatorError.cleanupFailed
         }
         try repository.resetReminderExecution(id: reminderID)
+        try cleanupJournal.remove(reminderID: reminderID)
+    }
+
+    private func saveCleanupJournal(
+        reminderID: UUID,
+        notificationIdentifiers: [String],
+        calendarReference: CalendarEventReference?
+    ) throws {
+        guard calendarReference != nil || !notificationIdentifiers.isEmpty else {
+            return
+        }
+        try cleanupJournal.save(
+            reminderID: reminderID,
+            entry: ReminderCleanupJournalEntry(
+                calendarReference: calendarReference,
+                notificationIdentifiers: stableUniqued(notificationIdentifiers)
+            )
+        )
     }
 
     private func stableUniqued(_ identifiers: [String]) -> [String] {

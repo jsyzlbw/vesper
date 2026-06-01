@@ -27,6 +27,7 @@ import UserNotifications
     #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
     #expect(record.calendarEventIdentifier == "event-1")
     #expect(record.calendarExternalIdentifier == "external-1")
+    #expect(fixture.cleanupJournal.entries[record.id] == nil)
 }
 
 @MainActor
@@ -249,6 +250,36 @@ import UserNotifications
 }
 
 @MainActor
+@Test func recoverInterruptedExecutionUsesJournalWhenDatabaseLacksHandles() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeRecord()
+    try fixture.repository.updateReminderExecution(
+        id: record.id,
+        status: .executing,
+        notificationResult: .pending,
+        calendarResult: .pending,
+        notificationIdentifiers: [],
+        calendarEventIdentifier: nil,
+        calendarExternalIdentifier: nil
+    )
+    let reference = CalendarEventReference(
+        eventIdentifier: "journal-event",
+        externalIdentifier: "journal-external"
+    )
+    fixture.cleanupJournal.entries[record.id] = ReminderCleanupJournalEntry(
+        calendarReference: reference,
+        notificationIdentifiers: ["journal-notification"]
+    )
+
+    try fixture.coordinator.recoverInterruptedExecution(reminderID: record.id)
+
+    #expect(fixture.calendar.removedReferences == [reference])
+    #expect(fixture.notifications.removedIdentifierBatches == [["journal-notification"]])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(fixture.cleanupJournal.entries[record.id] == nil)
+}
+
+@MainActor
 @Test func suspendedConfirmRejectsReentrantEditAndCancelWithoutCleanup() async throws {
     let fixture = try CoordinatorFixture()
     fixture.notifications.suspendAuthorization()
@@ -292,6 +323,20 @@ import UserNotifications
 }
 
 @MainActor
+@Test func notificationJournalFailureRollsBackAddedRequestsAndContinuesCalendar() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.cleanupJournal.failSaveCalls = [1]
+    let record = try fixture.makeRecord()
+
+    try await fixture.coordinator.confirm(reminderID: record.id)
+
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(fixture.calendar.authorizationRequestCount == 1)
+    #expect(record.notificationResult == ReminderExecutionResult.failed.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.created.rawValue)
+}
+
+@MainActor
 @Test func calendarPersistenceFailureRollsBackAllCreatedOutputsAndResetsExecution() async throws {
     let fixture = try CoordinatorFixture()
     let persistence = FailingReminderPersistence(
@@ -311,6 +356,23 @@ import UserNotifications
     #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
     #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
     #expect(record.notificationIdentifiers.isEmpty)
+    #expect(record.calendarEventIdentifier == nil)
+}
+
+@MainActor
+@Test func calendarJournalFailureRemovesCreatedEventAndKeepsScheduledNotifications() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.cleanupJournal.failSaveCalls = [2]
+    let record = try fixture.makeRecord()
+
+    try await fixture.coordinator.confirm(reminderID: record.id)
+
+    #expect(fixture.calendar.removedReferences == [
+        CalendarEventReference(eventIdentifier: "event-1", externalIdentifier: "external-1")
+    ])
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+    #expect(record.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.failed.rawValue)
     #expect(record.calendarEventIdentifier == nil)
 }
 
@@ -356,6 +418,38 @@ import UserNotifications
     #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
     #expect(record.calendarEventIdentifier == "event-1")
     #expect(record.calendarExternalIdentifier == "external-1")
+    #expect(fixture.cleanupJournal.entries[record.id] == ReminderCleanupJournalEntry(
+        calendarReference: CalendarEventReference(
+            eventIdentifier: "event-1",
+            externalIdentifier: "external-1"
+        ),
+        notificationIdentifiers: fixture.expectedNotificationIDs
+    ))
+}
+
+@MainActor
+@Test func sustainedPersistenceFailureAndCalendarCleanupFailureKeepsJournalHandles() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.calendar.removeError = FixtureError.failed
+    let persistence = FailingReminderPersistence(
+        repository: fixture.repository,
+        failUpdateCalls: [3, 4]
+    )
+    let coordinator = fixture.makeCoordinator(repository: persistence)
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: ReminderSchedulingCoordinatorError.cleanupFailed) {
+        try await coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(fixture.cleanupJournal.entries[record.id] == ReminderCleanupJournalEntry(
+        calendarReference: CalendarEventReference(
+            eventIdentifier: "event-1",
+            externalIdentifier: "external-1"
+        ),
+        notificationIdentifiers: fixture.expectedNotificationIDs
+    ))
 }
 
 @MainActor
@@ -372,6 +466,13 @@ import UserNotifications
     #expect(record.status == ReminderProposalStatus.executing.rawValue)
     #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
     #expect(record.calendarEventIdentifier == "event-1")
+    #expect(fixture.cleanupJournal.entries[record.id] == ReminderCleanupJournalEntry(
+        calendarReference: CalendarEventReference(
+            eventIdentifier: "event-1",
+            externalIdentifier: "external-1"
+        ),
+        notificationIdentifiers: fixture.expectedNotificationIDs
+    ))
 }
 
 @MainActor
@@ -379,6 +480,7 @@ private final class CoordinatorFixture {
     let repository: DiaryRepository
     let notifications = NotificationClientSpy()
     let calendar = CalendarClientSpy()
+    let cleanupJournal = CleanupJournalSpy()
     let proposal: ReminderProposal
     let coordinator: ReminderSchedulingCoordinator
 
@@ -398,6 +500,7 @@ private final class CoordinatorFixture {
             repository: repository,
             notificationClient: notifications,
             calendarClient: calendar,
+            cleanupJournal: cleanupJournal,
             requestFactory: { _, _, _ in requests },
             now: { Date(timeIntervalSince1970: 1_000) }
         )
@@ -429,6 +532,7 @@ private final class CoordinatorFixture {
             repository: repository,
             notificationClient: notifications,
             calendarClient: calendar,
+            cleanupJournal: cleanupJournal,
             requestFactory: { _, _, _ in requests },
             now: { Date(timeIntervalSince1970: 1_000) }
         )
@@ -436,6 +540,29 @@ private final class CoordinatorFixture {
 }
 
 @MainActor private var retainedContainers: [ModelContainer] = []
+
+@MainActor
+private final class CleanupJournalSpy: ReminderCleanupJournaling {
+    var entries: [UUID: ReminderCleanupJournalEntry] = [:]
+    var failSaveCalls: Set<Int> = []
+    private var saveCallCount = 0
+
+    func save(reminderID: UUID, entry: ReminderCleanupJournalEntry) throws {
+        saveCallCount += 1
+        guard !failSaveCalls.contains(saveCallCount) else {
+            throw FixtureError.failed
+        }
+        entries[reminderID] = entry
+    }
+
+    func load(reminderID: UUID) throws -> ReminderCleanupJournalEntry? {
+        entries[reminderID]
+    }
+
+    func remove(reminderID: UUID) throws {
+        entries.removeValue(forKey: reminderID)
+    }
+}
 
 @MainActor
 private final class NotificationClientSpy: ReminderNotificationClient {
@@ -562,12 +689,17 @@ private enum FixtureError: Error {
 @MainActor
 private final class FailingReminderPersistence: ReminderPersistence {
     private let repository: DiaryRepository
-    private let failUpdateCall: Int
+    private let failUpdateCalls: Set<Int>
     private var updateCallCount = 0
 
     init(repository: DiaryRepository, failUpdateCall: Int) {
         self.repository = repository
-        self.failUpdateCall = failUpdateCall
+        failUpdateCalls = [failUpdateCall]
+    }
+
+    init(repository: DiaryRepository, failUpdateCalls: Set<Int>) {
+        self.repository = repository
+        self.failUpdateCalls = failUpdateCalls
     }
 
     func reminder(id: UUID) throws -> ReminderRecord {
@@ -588,7 +720,7 @@ private final class FailingReminderPersistence: ReminderPersistence {
         calendarExternalIdentifier: String?
     ) throws {
         updateCallCount += 1
-        guard updateCallCount != failUpdateCall else {
+        guard !failUpdateCalls.contains(updateCallCount) else {
             throw FixtureError.persistenceFailed
         }
         try repository.updateReminderExecution(
