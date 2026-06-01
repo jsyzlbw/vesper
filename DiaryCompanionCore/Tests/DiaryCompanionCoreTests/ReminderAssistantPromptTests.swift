@@ -64,3 +64,17 @@ import Testing
     #expect(instruction.contains("不得生成已经完全落在过去的提醒提案"))
     #expect(instruction.contains(ReminderProposalEnvelopeParser.startMarker))
 }
+
+@Test func reminderAssistantPromptDefinesIndependentNotificationAndAlarmOutputs() {
+    let instruction = ReminderAssistantPrompt.systemInstruction
+
+    #expect(instruction.contains(
+        "用户只要求提醒时：notificationEnabled=true，alarmEnabled=false。"
+    ))
+    #expect(instruction.contains(
+        "用户只明确要求闹钟或 alarm 时：alarmEnabled=true，notificationEnabled=false。不得自动开启 notificationEnabled。"
+    ))
+    #expect(instruction.contains(
+        "用户同时明确要求提醒与闹钟时：notificationEnabled=true，alarmEnabled=true。"
+    ))
+}

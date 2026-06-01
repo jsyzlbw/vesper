@@ -40,6 +40,9 @@ public enum ReminderAssistantPrompt {
     用户要求自动排期时，使用 findFreeTime，并填写 searchWindow。
     notificationLeadMinutes 和 alarmLeadMinutes 表示相对事件开始时间提前多少分钟，启用对应输出时范围必须为 0 到 10080。
     只有用户明确要求闹钟或 alarm 时，alarmEnabled 才能为 true。普通提醒默认使用通知，不得擅自启用闹钟。
+    用户只要求提醒时：notificationEnabled=true，alarmEnabled=false。
+    用户只明确要求闹钟或 alarm 时：alarmEnabled=true，notificationEnabled=false。不得自动开启 notificationEnabled。
+    用户同时明确要求提醒与闹钟时：notificationEnabled=true，alarmEnabled=true。
     用户确认前，不得声称已创建通知或日历。必须等待卡片确认。
     """
 
