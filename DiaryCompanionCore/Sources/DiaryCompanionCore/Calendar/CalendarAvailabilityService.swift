@@ -8,7 +8,22 @@ public struct CalendarAvailabilityService: Sendable {
         durationMinutes: Int,
         busyIntervals: [DateInterval]
     ) -> DateInterval? {
-        guard durationMinutes > 0 else {
+        firstAvailableSlot(
+            within: searchWindow,
+            durationMinutes: durationMinutes,
+            busyIntervals: busyIntervals,
+            matchingStart: { _ in true }
+        )
+    }
+
+    public func firstAvailableSlot(
+        within searchWindow: DateInterval,
+        durationMinutes: Int,
+        busyIntervals: [DateInterval],
+        stepMinutes: Int = 15,
+        matchingStart: (Date) -> Bool
+    ) -> DateInterval? {
+        guard durationMinutes > 0, stepMinutes > 0 else {
             return nil
         }
 
@@ -28,18 +43,45 @@ public struct CalendarAvailabilityService: Sendable {
 
         var cursor = searchWindow.start
         for interval in merged(clippedIntervals) {
-            if interval.start.timeIntervalSince(cursor) >= duration {
-                return DateInterval(start: cursor, duration: duration)
+            if let slot = firstMatchingSlot(
+                from: cursor,
+                through: interval.start,
+                duration: duration,
+                stepMinutes: stepMinutes,
+                matchingStart: matchingStart
+            ) {
+                return slot
             }
             if interval.end > cursor {
                 cursor = interval.end
             }
         }
 
-        guard searchWindow.end.timeIntervalSince(cursor) >= duration else {
-            return nil
+        return firstMatchingSlot(
+            from: cursor,
+            through: searchWindow.end,
+            duration: duration,
+            stepMinutes: stepMinutes,
+            matchingStart: matchingStart
+        )
+    }
+
+    private func firstMatchingSlot(
+        from start: Date,
+        through end: Date,
+        duration: TimeInterval,
+        stepMinutes: Int,
+        matchingStart: (Date) -> Bool
+    ) -> DateInterval? {
+        let step = TimeInterval(stepMinutes) * 60
+        var candidate = start
+        while end.timeIntervalSince(candidate) >= duration {
+            if matchingStart(candidate) {
+                return DateInterval(start: candidate, duration: duration)
+            }
+            candidate.addTimeInterval(step)
         }
-        return DateInterval(start: cursor, duration: duration)
+        return nil
     }
 
     private func merged(_ intervals: [DateInterval]) -> [DateInterval] {

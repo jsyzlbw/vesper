@@ -187,8 +187,11 @@ struct ChatView: View {
                     if try diaryRepository.fetchReminders(
                         sourceMessageID: assistantMessageID
                     ).isEmpty {
+                        let resolvedProposal = try await ReminderAutoSchedulingService(
+                            calendarClient: EventKitCalendarClient()
+                        ).resolve(proposal)
                         try diaryRepository.createReminderProposal(
-                            proposal,
+                            resolvedProposal,
                             sourceMessageID: assistantMessageID
                         )
                     }
