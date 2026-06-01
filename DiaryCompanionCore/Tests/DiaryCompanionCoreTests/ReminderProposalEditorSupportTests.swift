@@ -79,6 +79,21 @@ import Testing
     )
 }
 
+@Test func validationErrorsExposeReadableMessagesForEditor() {
+    #expect(
+        ReminderProposalValidationError.emptyTitle.errorDescription
+            == "提醒标题不能为空。"
+    )
+    #expect(
+        ReminderProposalValidationError.emptyWeeklyWeekdays.errorDescription
+            == "每周提醒至少要选择一天。"
+    )
+    #expect(
+        ReminderProposalValidationError.invalidSearchWindow.errorDescription
+            == "自动安排的结束时间必须晚于开始时间。"
+    )
+}
+
 private func makeProposal(
     schedulingMode: ReminderSchedulingMode,
     searchWindow: ReminderSearchWindow? = nil

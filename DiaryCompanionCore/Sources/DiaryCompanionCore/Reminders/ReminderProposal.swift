@@ -83,6 +83,45 @@ public enum ReminderProposalValidationError: Error, Equatable, Sendable {
     case invalidFirstOccurrence
 }
 
+extension ReminderProposalValidationError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .emptyTitle:
+            "提醒标题不能为空。"
+        case .invalidDurationMinutes:
+            "事件持续时间必须在 1 到 1440 分钟之间。"
+        case .missingStart:
+            "请选择提醒时间。"
+        case .missingSearchWindow:
+            "请选择自动安排的时间范围。"
+        case .invalidSearchWindow:
+            "自动安排的结束时间必须晚于开始时间。"
+        case .searchWindowTooShort:
+            "自动安排的时间范围短于事件持续时间。"
+        case .invalidRecurrenceInterval:
+            "重复间隔必须大于 0。"
+        case .emptyWeeklyWeekdays:
+            "每周提醒至少要选择一天。"
+        case .duplicateWeeklyWeekdays:
+            "每周提醒包含重复的星期。"
+        case .invalidMonthlyDay:
+            "每月提醒日期必须在 1 到 31 之间。"
+        case .invalidYearlyMonth:
+            "年度提醒月份必须在 1 到 12 之间。"
+        case .invalidYearlyDay:
+            "年度提醒日期必须在 1 到 31 之间。"
+        case .invalidYearlyDate:
+            "年度提醒日期不存在。"
+        case .invalidOccurrenceCount:
+            "重复次数必须大于 0。"
+        case .invalidRecurrenceEndDate:
+            "重复结束日期不能早于首次提醒时间。"
+        case .invalidFirstOccurrence:
+            "提醒时间与重复规则不匹配。"
+        }
+    }
+}
+
 public struct ReminderProposal: Codable, Equatable, Sendable {
     public var title: String
     public var notes: String
