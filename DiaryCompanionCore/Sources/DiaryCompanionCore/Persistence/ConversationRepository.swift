@@ -53,6 +53,14 @@ public final class ConversationRepository {
         try context.save()
     }
 
+    public func replaceContent(_ content: String, of messageID: UUID) throws {
+        guard let message = try findMessage(id: messageID) else {
+            throw ConversationRepositoryError.messageNotFound(messageID)
+        }
+        message.content = content
+        try context.save()
+    }
+
     public func fetchConversations() throws -> [ConversationRecord] {
         var descriptor = FetchDescriptor<ConversationRecord>()
         descriptor.sortBy = [SortDescriptor(\.createdAt)]

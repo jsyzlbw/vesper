@@ -33,3 +33,30 @@ import Testing
     ])
     #expect(try repository.fetchMessages(conversationID: first.id).last?.content == "你好")
 }
+
+@MainActor
+@Test func repositoryReplacesMessageContent() throws {
+    let container = try DiaryModelContainerFactory.make(inMemory: true)
+    let repository = ConversationRepository(context: container.mainContext)
+    let conversation = try repository.defaultConversation()
+    let message = try repository.createMessage(
+        conversationID: conversation.id,
+        role: .assistant,
+        content: "visible\(ReminderProposalEnvelopeParser.startMarker)hidden"
+    )
+
+    try repository.replaceContent("visible", of: message.id)
+
+    #expect(try repository.fetchMessages(conversationID: conversation.id).first?.content == "visible")
+}
+
+@MainActor
+@Test func replacingUnknownMessageReusesMessageNotFoundError() throws {
+    let container = try DiaryModelContainerFactory.make(inMemory: true)
+    let repository = ConversationRepository(context: container.mainContext)
+    let id = UUID()
+
+    #expect(throws: ConversationRepositoryError.messageNotFound(id)) {
+        try repository.replaceContent("visible", of: id)
+    }
+}

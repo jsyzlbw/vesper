@@ -417,6 +417,27 @@ import Testing
 }
 
 @MainActor
+@Test func fetchRemindersBySourceMessageFiltersAndSortsByFirstOccurrence() throws {
+    let repository = try makeReminderRepository()
+    let sourceMessageID = UUID()
+    let otherSourceMessageID = UUID()
+    let later = makeFixedProposal(start: Date(timeIntervalSince1970: 9_000))
+    let earlier = makeFixedProposal(start: Date(timeIntervalSince1970: 3_000))
+
+    try repository.createReminderProposal(later, sourceMessageID: sourceMessageID)
+    try repository.createReminderProposal(earlier, sourceMessageID: sourceMessageID)
+    try repository.createReminderProposal(
+        makeFixedProposal(start: Date(timeIntervalSince1970: 1_000)),
+        sourceMessageID: otherSourceMessageID
+    )
+
+    #expect(try repository.fetchReminders(sourceMessageID: sourceMessageID).map(\.title) == [
+        earlier.title,
+        later.title,
+    ])
+}
+
+@MainActor
 private func makeReminderRepository() throws -> DiaryRepository {
     let container = try DiaryModelContainerFactory.make(inMemory: true)
     retainedReminderContainers.append(container)

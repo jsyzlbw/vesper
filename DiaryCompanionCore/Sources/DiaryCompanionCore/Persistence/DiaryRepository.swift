@@ -114,6 +114,14 @@ public final class DiaryRepository {
         return try context.fetch(descriptor)
     }
 
+    public func fetchReminders(sourceMessageID: UUID) throws -> [ReminderRecord] {
+        var descriptor = FetchDescriptor<ReminderRecord>(
+            predicate: #Predicate { $0.sourceMessageID == sourceMessageID }
+        )
+        descriptor.sortBy = [SortDescriptor(\.fireDate)]
+        return try context.fetch(descriptor)
+    }
+
     public func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal {
         if record.hasMigratedLegacyDefaults {
             guard !record.repeats else {
