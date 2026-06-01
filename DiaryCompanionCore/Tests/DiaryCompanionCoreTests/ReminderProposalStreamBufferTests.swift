@@ -48,13 +48,47 @@ import Testing
     #expect(buffer.visibleText == "普通文本 [[DIARY_REMARK")
 }
 
-@Test func reminderProposalStreamBufferKeepsFollowingTextHiddenAfterEnvelopeStarts() {
+@Test func reminderProposalStreamBufferShowsTextFollowingCompleteEnvelope() {
     var buffer = ReminderProposalStreamBuffer()
 
     buffer.append(ReminderProposalEnvelopeParser.startMarker)
     buffer.append(#"{"title":"Review"}"#)
     buffer.append(ReminderProposalEnvelopeParser.endMarker)
-    buffer.append("不应显示")
+    buffer.append("请确认。")
 
-    #expect(buffer.visibleText.isEmpty)
+    #expect(buffer.visibleText == "请确认。")
+}
+
+@Test func reminderProposalStreamBufferHidesSplitEndMarkerThenShowsFollowingText() {
+    var buffer = ReminderProposalStreamBuffer()
+
+    buffer.append("已整理。")
+    buffer.append(ReminderProposalEnvelopeParser.startMarker)
+    buffer.append(#"{"title":"Review"}"#)
+    buffer.append("[[/DIARY_REM")
+    #expect(buffer.visibleText == "已整理。")
+
+    buffer.append("INDER_PROPOSAL]]请确认。")
+    #expect(buffer.visibleText == "已整理。请确认。")
+}
+
+@Test func reminderProposalStreamBufferFinishFlushesIncompleteStartMarkerPrefix() {
+    var buffer = ReminderProposalStreamBuffer()
+
+    buffer.append("普通文本 [[DIARY_REM")
+    #expect(buffer.visibleText == "普通文本 ")
+
+    buffer.finish()
+    #expect(buffer.visibleText == "普通文本 [[DIARY_REM")
+}
+
+@Test func reminderProposalStreamBufferFinishKeepsUnclosedEnvelopeHidden() {
+    var buffer = ReminderProposalStreamBuffer()
+
+    buffer.append("已整理。")
+    buffer.append(ReminderProposalEnvelopeParser.startMarker)
+    buffer.append(#"{"title":"Review"}"#)
+    buffer.finish()
+
+    #expect(buffer.visibleText == "已整理。")
 }

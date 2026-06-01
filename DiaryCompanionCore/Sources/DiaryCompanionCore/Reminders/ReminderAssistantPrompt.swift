@@ -18,9 +18,19 @@ public enum ReminderAssistantPrompt {
       "notificationEnabled": Bool,
       "calendarEnabled": Bool
     }
-    recurrence 至少包含 kind；按周期需要补充 interval、weekdays、day、month 或 end。
+    recurrence schema：
+    - once: {"kind":"once"}
+    - daily: {"kind":"daily","interval":Int,"end":End | null}
+    - weekly: {"kind":"weekly","interval":Int,"weekdays":[Int],"end":End | null}
+    - monthly: {"kind":"monthly","interval":Int,"day":Int,"end":End | null}
+    - monthlyLastDay: {"kind":"monthlyLastDay","interval":Int,"end":End | null}
+    - yearly: {"kind":"yearly","interval":Int,"month":Int,"day":Int,"end":End | null}
+    End schema：
+    - date: {"kind":"date","date":ISO8601 String}
+    - occurrenceCount: {"kind":"occurrenceCount","occurrenceCount":Int}
     所有日期时间使用包含时区的 ISO8601 格式。
     schedulingMode 只能是 fixed 或 findFreeTime。
+    fixed 要求 start。findFreeTime 要求 searchWindow。
     用户要求自动排期时，使用 findFreeTime，并填写 searchWindow。
     用户确认前，不得声称已创建通知或日历。必须等待卡片确认。
     """

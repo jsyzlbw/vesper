@@ -2,33 +2,42 @@ public struct ReminderProposalStreamBuffer: Sendable {
     public private(set) var rawText = ""
     public private(set) var visibleText = ""
 
-    private var pendingText = ""
-    private var isHidingEnvelope = false
-
     public init() {}
 
     public mutating func append(_ delta: String) {
         rawText.append(delta)
-        guard !isHidingEnvelope else {
-            return
+        visibleText = makeVisibleText(flushIncompleteMarkerPrefix: false)
+    }
+
+    public mutating func finish() {
+        visibleText = makeVisibleText(flushIncompleteMarkerPrefix: true)
+    }
+
+    private func makeVisibleText(flushIncompleteMarkerPrefix: Bool) -> String {
+        let startMarker = ReminderProposalEnvelopeParser.startMarker
+        let endMarker = ReminderProposalEnvelopeParser.endMarker
+        var remaining = rawText[...]
+        var result = ""
+
+        while let startRange = remaining.range(of: startMarker) {
+            result.append(contentsOf: remaining[..<startRange.lowerBound])
+            let envelope = remaining[startRange.upperBound...]
+            guard let endRange = envelope.range(of: endMarker) else {
+                return result
+            }
+            remaining = envelope[endRange.upperBound...]
         }
 
-        pendingText.append(delta)
-        let marker = ReminderProposalEnvelopeParser.startMarker
-        if let markerRange = pendingText.range(of: marker) {
-            visibleText.append(contentsOf: pendingText[..<markerRange.lowerBound])
-            pendingText = ""
-            isHidingEnvelope = true
-            return
+        result.append(contentsOf: remaining)
+        guard !flushIncompleteMarkerPrefix else {
+            return result
         }
 
         let heldSuffixLength = longestSuffixMatchingMarkerPrefix(
-            in: pendingText,
-            marker: marker
+            in: result,
+            marker: startMarker
         )
-        let flushEnd = pendingText.index(pendingText.endIndex, offsetBy: -heldSuffixLength)
-        visibleText.append(contentsOf: pendingText[..<flushEnd])
-        pendingText = String(pendingText[flushEnd...])
+        return String(result.dropLast(heldSuffixLength))
     }
 
     private func longestSuffixMatchingMarkerPrefix(
