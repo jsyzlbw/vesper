@@ -6,17 +6,35 @@ public enum ReminderSchedulingCoordinatorError: Error, Equatable, Sendable {
 }
 
 @MainActor
+public protocol ReminderPersistence: AnyObject {
+    func reminder(id: UUID) throws -> ReminderRecord
+    func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal
+    func updateReminderExecution(
+        id: UUID,
+        status: ReminderProposalStatus,
+        notificationResult: ReminderExecutionResult,
+        calendarResult: ReminderExecutionResult,
+        notificationIdentifiers: [String],
+        calendarEventIdentifier: String?,
+        calendarExternalIdentifier: String?
+    ) throws
+    func resetReminderExecution(id: UUID) throws
+    func updateReminderProposal(id: UUID, proposal: ReminderProposal) throws
+    func cancelReminder(id: UUID) throws
+}
+
+@MainActor
 public final class ReminderSchedulingCoordinator {
     typealias RequestFactory = (UUID, ReminderProposal, Date) throws -> [UNNotificationRequest]
 
-    private let repository: DiaryRepository
+    private let repository: any ReminderPersistence
     private let notificationClient: ReminderNotificationClient
     private let calendarClient: CalendarClient
     private let makeRequests: RequestFactory
     private let now: () -> Date
 
     public init(
-        repository: DiaryRepository,
+        repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
         calendarClient: CalendarClient,
         requestFactory: ReminderRequestFactory = ReminderRequestFactory(),
@@ -36,7 +54,7 @@ public final class ReminderSchedulingCoordinator {
     }
 
     init(
-        repository: DiaryRepository,
+        repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
         calendarClient: CalendarClient,
         requestFactory: @escaping RequestFactory,
@@ -87,16 +105,33 @@ public final class ReminderSchedulingCoordinator {
                     notificationResult = .permissionDenied
                 }
             } catch {
+                if error is CancellationError {
+                    compensate(
+                        reminderID: reminderID,
+                        notificationIdentifiers: notificationIdentifiers,
+                        calendarReference: calendarReference
+                    )
+                    throw error
+                }
                 notificationResult = .failed
             }
-            try persist(
-                reminderID: reminderID,
-                status: .executing,
-                notificationResult: notificationResult,
-                calendarResult: calendarResult,
-                notificationIdentifiers: notificationIdentifiers,
-                calendarReference: calendarReference
-            )
+            do {
+                try persist(
+                    reminderID: reminderID,
+                    status: .executing,
+                    notificationResult: notificationResult,
+                    calendarResult: calendarResult,
+                    notificationIdentifiers: notificationIdentifiers,
+                    calendarReference: calendarReference
+                )
+            } catch {
+                compensate(
+                    reminderID: reminderID,
+                    notificationIdentifiers: notificationIdentifiers,
+                    calendarReference: calendarReference
+                )
+                throw error
+            }
         }
 
         if proposal.calendarEnabled {
@@ -108,21 +143,39 @@ public final class ReminderSchedulingCoordinator {
                     calendarResult = .permissionDenied
                 }
             } catch {
+                if error is CancellationError {
+                    compensate(
+                        reminderID: reminderID,
+                        notificationIdentifiers: notificationIdentifiers,
+                        calendarReference: calendarReference
+                    )
+                    throw error
+                }
                 calendarResult = .failed
             }
         }
 
-        try persist(
-            reminderID: reminderID,
-            status: .scheduled,
-            notificationResult: notificationResult,
-            calendarResult: calendarResult,
-            notificationIdentifiers: notificationIdentifiers,
-            calendarReference: calendarReference
-        )
+        do {
+            try persist(
+                reminderID: reminderID,
+                status: .scheduled,
+                notificationResult: notificationResult,
+                calendarResult: calendarResult,
+                notificationIdentifiers: notificationIdentifiers,
+                calendarReference: calendarReference
+            )
+        } catch {
+            compensate(
+                reminderID: reminderID,
+                notificationIdentifiers: notificationIdentifiers,
+                calendarReference: calendarReference
+            )
+            throw error
+        }
     }
 
     public func edit(reminderID: UUID, proposal: ReminderProposal) throws {
+        try proposal.validate()
         let record = try repository.reminder(id: reminderID)
         try rejectExecuting(record)
         try removeOutputs(for: record)
@@ -138,13 +191,28 @@ public final class ReminderSchedulingCoordinator {
         try repository.cancelReminder(id: reminderID)
     }
 
-    private func rejectExecuting(_ record: ReminderRecord) throws {
-        guard let status = ReminderProposalStatus(rawValue: record.status) else {
-            throw DiaryRepositoryError.invalidReminderStatus(record.status)
+    public func recoverInterruptedExecution(reminderID: UUID) throws {
+        let record = try repository.reminder(id: reminderID)
+        let status = try status(of: record)
+        guard status == .executing else {
+            throw ReminderSchedulingCoordinatorError.invalidStatus(status)
         }
+        try removeOutputs(for: record)
+        try repository.resetReminderExecution(id: reminderID)
+    }
+
+    private func rejectExecuting(_ record: ReminderRecord) throws {
+        let status = try status(of: record)
         guard status != .executing else {
             throw ReminderSchedulingCoordinatorError.invalidStatus(status)
         }
+    }
+
+    private func status(of record: ReminderRecord) throws -> ReminderProposalStatus {
+        guard let status = ReminderProposalStatus(rawValue: record.status) else {
+            throw DiaryRepositoryError.invalidReminderStatus(record.status)
+        }
+        return status
     }
 
     private func removeOutputs(for record: ReminderRecord) throws {
@@ -178,5 +246,34 @@ public final class ReminderSchedulingCoordinator {
             calendarEventIdentifier: calendarReference?.eventIdentifier,
             calendarExternalIdentifier: calendarReference?.externalIdentifier
         )
+    }
+
+    private func compensate(
+        reminderID: UUID,
+        notificationIdentifiers: [String],
+        calendarReference: CalendarEventReference?
+    ) {
+        let record = try? repository.reminder(id: reminderID)
+        let persistedCalendarReference = record?.calendarEventIdentifier.map {
+            CalendarEventReference(
+                eventIdentifier: $0,
+                externalIdentifier: record?.calendarExternalIdentifier
+            )
+        }
+        if let calendarReference = calendarReference ?? persistedCalendarReference {
+            try? calendarClient.removeEvent(reference: calendarReference)
+        }
+        let identifiers = stableUniqued(
+            notificationIdentifiers + (record?.notificationIdentifiers ?? [])
+        )
+        if !identifiers.isEmpty {
+            notificationClient.removePendingRequests(withIdentifiers: identifiers)
+        }
+        try? repository.resetReminderExecution(id: reminderID)
+    }
+
+    private func stableUniqued(_ identifiers: [String]) -> [String] {
+        var seen: Set<String> = []
+        return identifiers.filter { seen.insert($0).inserted }
     }
 }

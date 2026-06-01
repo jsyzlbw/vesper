@@ -123,6 +123,25 @@ import UserNotifications
 }
 
 @MainActor
+@Test func editRejectsInvalidProposalBeforeCleaningUpExistingOutputs() async throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeRecord()
+    try await fixture.coordinator.confirm(reminderID: record.id)
+
+    #expect(throws: ReminderProposalValidationError.emptyTitle) {
+        try fixture.coordinator.edit(
+            reminderID: record.id,
+            proposal: makeProposal(title: "")
+        )
+    }
+
+    #expect(fixture.calendar.removedReferences.isEmpty)
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+    #expect(record.status == ReminderProposalStatus.scheduled.rawValue)
+    #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
+}
+
+@MainActor
 @Test func cancelCleansUpOutputsAndPersistsCancelledStatus() async throws {
     let fixture = try CoordinatorFixture()
     let record = try fixture.makeRecord()
@@ -186,6 +205,116 @@ import UserNotifications
 }
 
 @MainActor
+@Test func notificationAuthorizationCancellationStopsCalendarAndResetsExecution() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.notifications.requestAuthorizationError = CancellationError()
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: CancellationError.self) {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(fixture.calendar.authorizationRequestCount == 0)
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+}
+
+@MainActor
+@Test func calendarAuthorizationCancellationCleansScheduledNotificationsAndResetsExecution() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.calendar.requestAuthorizationError = CancellationError()
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: CancellationError.self) {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+}
+
+@MainActor
+@Test func recoverInterruptedExecutionCleansPersistedOutputsAndResetsExecution() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeExecutingRecord()
+
+    try fixture.coordinator.recoverInterruptedExecution(reminderID: record.id)
+
+    #expect(fixture.calendar.removedReferences == [
+        CalendarEventReference(eventIdentifier: "event-1", externalIdentifier: "external-1")
+    ])
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+}
+
+@MainActor
+@Test func suspendedConfirmRejectsReentrantEditAndCancelWithoutCleanup() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.notifications.suspendAuthorization()
+    let record = try fixture.makeRecord()
+    let confirmTask = Task {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+    await fixture.notifications.waitUntilAuthorizationRequested()
+
+    #expect(throws: ReminderSchedulingCoordinatorError.invalidStatus(.executing)) {
+        try fixture.coordinator.edit(reminderID: record.id, proposal: makeProposal(title: "Edited"))
+    }
+    #expect(throws: ReminderSchedulingCoordinatorError.invalidStatus(.executing)) {
+        try fixture.coordinator.cancel(reminderID: record.id)
+    }
+    #expect(fixture.calendar.removedReferences.isEmpty)
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+
+    fixture.notifications.resumeAuthorization()
+    try await confirmTask.value
+}
+
+@MainActor
+@Test func notificationPersistenceFailureRollsBackAddedRequestsAndResetsExecution() async throws {
+    let fixture = try CoordinatorFixture()
+    let persistence = FailingReminderPersistence(
+        repository: fixture.repository,
+        failUpdateCall: 2
+    )
+    let coordinator = fixture.makeCoordinator(repository: persistence)
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: FixtureError.persistenceFailed) {
+        try await coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(fixture.calendar.authorizationRequestCount == 0)
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+}
+
+@MainActor
+@Test func calendarPersistenceFailureRollsBackAllCreatedOutputsAndResetsExecution() async throws {
+    let fixture = try CoordinatorFixture()
+    let persistence = FailingReminderPersistence(
+        repository: fixture.repository,
+        failUpdateCall: 3
+    )
+    let coordinator = fixture.makeCoordinator(repository: persistence)
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: FixtureError.persistenceFailed) {
+        try await coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(fixture.calendar.removedReferences == [
+        CalendarEventReference(eventIdentifier: "event-1", externalIdentifier: "external-1")
+    ])
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+    #expect(record.calendarEventIdentifier == nil)
+}
+
+@MainActor
 private final class CoordinatorFixture {
     let repository: DiaryRepository
     let notifications = NotificationClientSpy()
@@ -231,6 +360,19 @@ private final class CoordinatorFixture {
         )
         return record
     }
+
+    func makeCoordinator(
+        repository: any ReminderPersistence
+    ) -> ReminderSchedulingCoordinator {
+        let requests = self.requests
+        return ReminderSchedulingCoordinator(
+            repository: repository,
+            notificationClient: notifications,
+            calendarClient: calendar,
+            requestFactory: { _, _, _ in requests },
+            now: { Date(timeIntervalSince1970: 1_000) }
+        )
+    }
 }
 
 @MainActor private var retainedContainers: [ModelContainer] = []
@@ -242,9 +384,19 @@ private final class NotificationClientSpy: ReminderNotificationClient {
     var authorizationRequestCount = 0
     var addedIdentifierBatches: [[String]] = []
     var removedIdentifierBatches: [[String]] = []
+    private var shouldSuspendAuthorization = false
+    private var authorizationContinuation: CheckedContinuation<Void, Never>?
+    private var requestWaiters: [CheckedContinuation<Void, Never>] = []
 
     func requestAuthorization() async throws -> Bool {
         authorizationRequestCount += 1
+        requestWaiters.forEach { $0.resume() }
+        requestWaiters = []
+        if shouldSuspendAuthorization {
+            await withCheckedContinuation { continuation in
+                authorizationContinuation = continuation
+            }
+        }
         if let requestAuthorizationError {
             throw requestAuthorizationError
         }
@@ -257,6 +409,25 @@ private final class NotificationClientSpy: ReminderNotificationClient {
 
     func removePendingRequests(withIdentifiers identifiers: [String]) {
         removedIdentifierBatches.append(identifiers)
+    }
+
+    func suspendAuthorization() {
+        shouldSuspendAuthorization = true
+    }
+
+    func waitUntilAuthorizationRequested() async {
+        guard authorizationRequestCount == 0 else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            requestWaiters.append(continuation)
+        }
+    }
+
+    func resumeAuthorization() {
+        shouldSuspendAuthorization = false
+        authorizationContinuation?.resume()
+        authorizationContinuation = nil
     }
 }
 
@@ -296,6 +467,63 @@ private final class CalendarClientSpy: CalendarClient {
 
 private enum FixtureError: Error {
     case failed
+    case persistenceFailed
+}
+
+@MainActor
+private final class FailingReminderPersistence: ReminderPersistence {
+    private let repository: DiaryRepository
+    private let failUpdateCall: Int
+    private var updateCallCount = 0
+
+    init(repository: DiaryRepository, failUpdateCall: Int) {
+        self.repository = repository
+        self.failUpdateCall = failUpdateCall
+    }
+
+    func reminder(id: UUID) throws -> ReminderRecord {
+        try repository.reminder(id: id)
+    }
+
+    func reminderProposal(from record: ReminderRecord) throws -> ReminderProposal {
+        try repository.reminderProposal(from: record)
+    }
+
+    func updateReminderExecution(
+        id: UUID,
+        status: ReminderProposalStatus,
+        notificationResult: ReminderExecutionResult,
+        calendarResult: ReminderExecutionResult,
+        notificationIdentifiers: [String],
+        calendarEventIdentifier: String?,
+        calendarExternalIdentifier: String?
+    ) throws {
+        updateCallCount += 1
+        guard updateCallCount != failUpdateCall else {
+            throw FixtureError.persistenceFailed
+        }
+        try repository.updateReminderExecution(
+            id: id,
+            status: status,
+            notificationResult: notificationResult,
+            calendarResult: calendarResult,
+            notificationIdentifiers: notificationIdentifiers,
+            calendarEventIdentifier: calendarEventIdentifier,
+            calendarExternalIdentifier: calendarExternalIdentifier
+        )
+    }
+
+    func resetReminderExecution(id: UUID) throws {
+        try repository.resetReminderExecution(id: id)
+    }
+
+    func updateReminderProposal(id: UUID, proposal: ReminderProposal) throws {
+        try repository.updateReminderProposal(id: id, proposal: proposal)
+    }
+
+    func cancelReminder(id: UUID) throws {
+        try repository.cancelReminder(id: id)
+    }
 }
 
 private func makeProposal(

@@ -13,7 +13,7 @@ public enum DiaryRepositoryError: Error, Equatable, Sendable {
 }
 
 @MainActor
-public final class DiaryRepository {
+public final class DiaryRepository: ReminderPersistence {
     private let context: ModelContext
 
     public init(context: ModelContext) {
@@ -191,7 +191,7 @@ public final class DiaryRepository {
         try context.save()
     }
 
-    func resetReminderExecution(id: UUID) throws {
+    public func resetReminderExecution(id: UUID) throws {
         let record = try reminder(id: id)
         record.status = ReminderProposalStatus.pendingConfirmation.rawValue
         record.notificationResult = ReminderExecutionResult.notRequested.rawValue
@@ -244,7 +244,7 @@ public final class DiaryRepository {
         return try context.fetch(descriptor)
     }
 
-    func reminder(id: UUID) throws -> ReminderRecord {
+    public func reminder(id: UUID) throws -> ReminderRecord {
         let descriptor = FetchDescriptor<ReminderRecord>(
             predicate: #Predicate { $0.id == id }
         )
