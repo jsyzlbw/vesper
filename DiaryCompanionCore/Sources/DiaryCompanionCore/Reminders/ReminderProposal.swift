@@ -81,6 +81,8 @@ public enum ReminderProposalValidationError: Error, Equatable, Sendable {
     case invalidOccurrenceCount
     case invalidRecurrenceEndDate
     case invalidFirstOccurrence
+    case startIsInThePast
+    case searchWindowIsInThePast
 }
 
 extension ReminderProposalValidationError: LocalizedError {
@@ -118,6 +120,10 @@ extension ReminderProposalValidationError: LocalizedError {
             "重复结束日期不能早于首次提醒时间。"
         case .invalidFirstOccurrence:
             "提醒时间与重复规则不匹配。"
+        case .startIsInThePast:
+            "提醒开始时间不能早于当前时间。"
+        case .searchWindowIsInThePast:
+            "自动安排的时间范围不能完全落在过去。"
         }
     }
 }
@@ -191,6 +197,21 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         try recurrence.validate(anchor: anchor)
         if schedulingMode == .fixed {
             try recurrence.validateFirstOccurrence(anchor)
+        }
+    }
+
+    public func validateForCreation(referenceDate: Date) throws {
+        try validate()
+
+        switch schedulingMode {
+        case .fixed:
+            guard let start, start >= referenceDate else {
+                throw ReminderProposalValidationError.startIsInThePast
+            }
+        case .findFreeTime:
+            guard let searchWindow, searchWindow.end > referenceDate else {
+                throw ReminderProposalValidationError.searchWindowIsInThePast
+            }
         }
     }
 }

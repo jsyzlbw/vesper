@@ -197,17 +197,24 @@ struct ChatView: View {
                     of: assistantMessageID
                 )
                 if let proposal = parseResult.proposal {
+                    try proposal.validateForCreation(referenceDate: Date())
                     let diaryRepository = DiaryRepository(context: modelContext)
                     if try diaryRepository.fetchReminders(
                         sourceMessageID: assistantMessageID
                     ).isEmpty {
+                        let reminder = try diaryRepository.createReminderProposal(
+                            proposal,
+                            sourceMessageID: assistantMessageID
+                        )
                         let resolvedProposal = try await ReminderAutoSchedulingService(
                             calendarClient: EventKitCalendarClient()
                         ).resolve(proposal)
-                        try diaryRepository.createReminderProposal(
-                            resolvedProposal,
-                            sourceMessageID: assistantMessageID
-                        )
+                        if resolvedProposal != proposal {
+                            try diaryRepository.updateReminderProposal(
+                                id: reminder.id,
+                                proposal: resolvedProposal
+                            )
+                        }
                     }
                 }
             }
@@ -222,7 +229,10 @@ struct ChatView: View {
                 role: .system,
                 content: """
                 你是一个简洁可靠的个人日记助手。请使用中文回答。
-                \(ReminderAssistantPrompt.systemInstruction)
+                \(ReminderAssistantPrompt.systemInstruction(
+                    now: Date(),
+                    timeZone: .current
+                ))
                 """
             ),
         ]

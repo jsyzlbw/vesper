@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import DiaryCompanionCore
 
@@ -44,4 +45,18 @@ import Testing
     #expect(instruction.contains("5=Thursday"))
     #expect(instruction.contains("6=Friday"))
     #expect(instruction.contains("7=Saturday"))
+}
+
+@Test func reminderAssistantPromptIncludesCurrentLocalTime() {
+    let timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    let instruction = ReminderAssistantPrompt.systemInstruction(
+        now: Date(timeIntervalSince1970: 1_780_272_000),
+        timeZone: timeZone
+    )
+
+    #expect(instruction.contains("当前本地时间："))
+    #expect(instruction.contains("当前时区：Asia/Shanghai"))
+    #expect(instruction.contains("忽略历史对话里可能出现的旧日期推断"))
+    #expect(instruction.contains("不得生成已经完全落在过去的提醒提案"))
+    #expect(instruction.contains(ReminderProposalEnvelopeParser.startMarker))
 }

@@ -58,6 +58,33 @@ import Testing
     ).validate()
 }
 
+@Test func rejectsFixedReminderCreationInThePast() {
+    let proposal = makeProposal(start: Date(timeIntervalSince1970: 1_000))
+
+    #expect(throws: ReminderProposalValidationError.startIsInThePast) {
+        try proposal.validateForCreation(
+            referenceDate: Date(timeIntervalSince1970: 2_000)
+        )
+    }
+}
+
+@Test func rejectsAutomaticReminderCreationWhenWindowIsEntirelyInThePast() {
+    let proposal = makeProposal(
+        start: nil,
+        schedulingMode: .findFreeTime,
+        searchWindow: ReminderSearchWindow(
+            start: Date(timeIntervalSince1970: 1_000),
+            end: Date(timeIntervalSince1970: 3_000)
+        )
+    )
+
+    #expect(throws: ReminderProposalValidationError.searchWindowIsInThePast) {
+        try proposal.validateForCreation(
+            referenceDate: Date(timeIntervalSince1970: 4_000)
+        )
+    }
+}
+
 @Test func findFreeTimeDoesNotValidateFirstOccurrenceBeforeScheduling() throws {
     let window = ReminderSearchWindow(
         start: makeDate(year: 2026, month: 6, day: 2),

@@ -1,3 +1,5 @@
+import Foundation
+
 public enum ReminderAssistantPrompt {
     public static let systemInstruction = """
     你可以帮助用户整理提醒建议。时间或周期信息不完整时，先追问，不要输出提醒提案。
@@ -35,4 +37,22 @@ public enum ReminderAssistantPrompt {
     用户要求自动排期时，使用 findFreeTime，并填写 searchWindow。
     用户确认前，不得声称已创建通知或日历。必须等待卡片确认。
     """
+
+    public static func systemInstruction(
+        now: Date,
+        timeZone: TimeZone
+    ) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = timeZone
+
+        return """
+        当前本地时间：\(formatter.string(from: now))
+        当前时区：\(timeZone.identifier)
+        生成提醒提案时，以这里提供的当前本地时间为准。忽略历史对话里可能出现的旧日期推断。
+        用户没有指定开始日期时，从当前日期或下一个合理的未来时间开始。不得生成已经完全落在过去的提醒提案。
+
+        \(systemInstruction)
+        """
+    }
 }
