@@ -245,6 +245,10 @@ struct ChatView: View {
                 switch action {
                 case .confirm:
                     try await coordinator.confirm(reminderID: reminder.id)
+                    try await ReminderNotificationReplenisher(
+                        repository: DiaryRepository(context: modelContext),
+                        notificationClient: UserNotificationCenterClient()
+                    ).replenish()
                 case .cancel:
                     try coordinator.cancel(reminderID: reminder.id)
                 case .recover:

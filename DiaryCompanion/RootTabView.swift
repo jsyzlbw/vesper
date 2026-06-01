@@ -3,6 +3,9 @@ import SwiftData
 import SwiftUI
 
 struct RootTabView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         TabView {
             NavigationStack {
@@ -39,6 +42,25 @@ struct RootTabView: View {
                 Label("审计", systemImage: "checklist")
             }
         }
+        .task {
+            await replenishNotifications()
+        }
+        .onChange(of: scenePhase) {
+            guard scenePhase == .active else {
+                return
+            }
+            Task {
+                await replenishNotifications()
+            }
+        }
+    }
+
+    @MainActor
+    private func replenishNotifications() async {
+        try? await ReminderNotificationReplenisher(
+            repository: DiaryRepository(context: modelContext),
+            notificationClient: UserNotificationCenterClient()
+        ).replenish()
     }
 }
 
