@@ -84,7 +84,7 @@ public protocol AlarmClient: AnyObject {
 
 The production implementation uses Apple AlarmKit when available on iOS 26 and later. The app must remain buildable for its existing deployment target by guarding AlarmKit code with availability checks.
 
-AlarmKit output follows the same rolling-window policy as notifications: create a bounded prefix of concrete alarm occurrences and replenish later. Alarm identifiers are persisted for cancellation, editing, compensation, and recovery.
+AlarmKit output follows the same rolling-window policy as notifications: expand the proposal recurrence into a bounded prefix of concrete occurrences, then schedule each occurrence with `Alarm.Schedule.fixed(Date)`. This is intentional: AlarmKit's relative recurrence can express weekly repetition but not every-two-week, monthly, or yearly rules. Fixed concrete alarms keep all supported Vesper recurrence rules consistent. Alarm identifiers are persisted for cancellation, editing, compensation, and recovery.
 
 On older systems, the production client throws a readable `alarmRequiresIOS26` error if an alarm is requested. No ordinary notification is created as an implicit substitute.
 
