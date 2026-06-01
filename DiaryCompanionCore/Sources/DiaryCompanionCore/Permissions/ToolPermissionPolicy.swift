@@ -65,7 +65,7 @@ public struct ToolPermissionPolicy: Codable, Equatable, Sendable {
         if mode == .denied {
             return .deny
         }
-        if tool.isHighRisk {
+        if tool.isHighRisk || tool == .scheduleReminder {
             return .confirm
         }
         return mode == .automatic ? .allow : .confirm

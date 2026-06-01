@@ -236,7 +236,7 @@ public final class DiaryRepository {
         return try context.fetch(descriptor)
     }
 
-    private func reminder(id: UUID) throws -> ReminderRecord {
+    func reminder(id: UUID) throws -> ReminderRecord {
         let descriptor = FetchDescriptor<ReminderRecord>(
             predicate: #Predicate { $0.id == id }
         )

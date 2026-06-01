@@ -23,3 +23,9 @@ import Testing
     policy.capabilityModes[.diary] = .automatic
     #expect(policy.decision(for: .deleteDiaryEntry) == .confirm)
 }
+
+@Test func automaticReminderSchedulingStillRequiresConfirmation() {
+    var policy = ToolPermissionPolicy()
+    policy.capabilityModes[.reminder] = .automatic
+    #expect(policy.decision(for: .scheduleReminder) == .confirm)
+}

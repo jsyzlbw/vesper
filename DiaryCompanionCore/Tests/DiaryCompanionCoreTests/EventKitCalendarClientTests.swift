@@ -134,15 +134,26 @@ import Testing
     )
 }
 
-@Test func eventLookupWithoutFallbackThrowsNotFound() {
-    #expect(throws: EventKitCalendarClientError.eventNotFound("event-1")) {
+@Test func eventLookupWithoutFallbackIsIdempotent() throws {
+    #expect(
         try EventKitCalendarClient.eventLookupResolution(
             eventIdentifier: "event-1",
             primaryExists: false,
             externalIdentifier: nil,
             externalCandidatesCount: 0
-        )
-    }
+        ) == .notFound
+    )
+}
+
+@Test func eventLookupWithoutExternalMatchIsIdempotent() throws {
+    #expect(
+        try EventKitCalendarClient.eventLookupResolution(
+            eventIdentifier: "event-1",
+            primaryExists: false,
+            externalIdentifier: "external-1",
+            externalCandidatesCount: 0
+        ) == .notFound
+    )
 }
 
 @Test func eventLookupWithMultipleFallbackMatchesThrowsAmbiguousError() {

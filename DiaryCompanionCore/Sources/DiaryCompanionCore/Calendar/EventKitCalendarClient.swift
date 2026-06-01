@@ -32,6 +32,7 @@ public enum EventKitCalendarClientError: Error, Equatable, Sendable {
 enum EventLookupResolution: Equatable {
     case primary
     case externalCandidate
+    case notFound
 }
 
 @MainActor
@@ -121,6 +122,8 @@ public final class EventKitCalendarClient: CalendarClient {
             event = primaryEvent!
         case .externalCandidate:
             event = externalCandidates[0]
+        case .notFound:
+            return
         }
         try eventStore.remove(
             event,
@@ -148,11 +151,11 @@ public final class EventKitCalendarClient: CalendarClient {
             return .primary
         }
         guard let externalIdentifier, !externalIdentifier.isEmpty else {
-            throw EventKitCalendarClientError.eventNotFound(eventIdentifier)
+            return .notFound
         }
         switch externalCandidatesCount {
         case 0:
-            throw EventKitCalendarClientError.eventNotFound(eventIdentifier)
+            return .notFound
         case 1:
             return .externalCandidate
         default:
