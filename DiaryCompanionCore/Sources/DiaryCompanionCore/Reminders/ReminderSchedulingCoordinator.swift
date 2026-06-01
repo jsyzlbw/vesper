@@ -3,6 +3,7 @@ import UserNotifications
 
 public enum ReminderSchedulingCoordinatorError: Error, Equatable, Sendable {
     case invalidStatus(ReminderProposalStatus)
+    case cleanupFailed
 }
 
 @MainActor
@@ -96,18 +97,25 @@ public final class ReminderSchedulingCoordinator {
 
         if proposal.notificationEnabled {
             do {
-                if try await notificationClient.requestAuthorization() {
+                try Task.checkCancellation()
+                let isAuthorized = try await notificationClient.requestAuthorization()
+                try Task.checkCancellation()
+                if isAuthorized {
                     let requests = try makeRequests(reminderID, proposal, now())
+                    try Task.checkCancellation()
                     try await notificationClient.add(requests)
                     notificationIdentifiers = requests.map(\.identifier)
+                    try Task.checkCancellation()
                     notificationResult = .scheduled
                 } else {
                     notificationResult = .permissionDenied
                 }
             } catch {
                 if error is CancellationError {
-                    compensate(
+                    try compensate(
                         reminderID: reminderID,
+                        notificationResult: notificationResult,
+                        calendarResult: calendarResult,
                         notificationIdentifiers: notificationIdentifiers,
                         calendarReference: calendarReference
                     )
@@ -125,8 +133,10 @@ public final class ReminderSchedulingCoordinator {
                     calendarReference: calendarReference
                 )
             } catch {
-                compensate(
+                try compensate(
                     reminderID: reminderID,
+                    notificationResult: notificationResult,
+                    calendarResult: calendarResult,
                     notificationIdentifiers: notificationIdentifiers,
                     calendarReference: calendarReference
                 )
@@ -136,16 +146,23 @@ public final class ReminderSchedulingCoordinator {
 
         if proposal.calendarEnabled {
             do {
-                if try await calendarClient.requestFullAccess() {
+                try Task.checkCancellation()
+                let isAuthorized = try await calendarClient.requestFullAccess()
+                try Task.checkCancellation()
+                if isAuthorized {
+                    try Task.checkCancellation()
                     calendarReference = try await calendarClient.createEvent(for: proposal)
+                    try Task.checkCancellation()
                     calendarResult = .created
                 } else {
                     calendarResult = .permissionDenied
                 }
             } catch {
                 if error is CancellationError {
-                    compensate(
+                    try compensate(
                         reminderID: reminderID,
+                        notificationResult: notificationResult,
+                        calendarResult: calendarResult,
                         notificationIdentifiers: notificationIdentifiers,
                         calendarReference: calendarReference
                     )
@@ -165,8 +182,10 @@ public final class ReminderSchedulingCoordinator {
                 calendarReference: calendarReference
             )
         } catch {
-            compensate(
+            try compensate(
                 reminderID: reminderID,
+                notificationResult: notificationResult,
+                calendarResult: calendarResult,
                 notificationIdentifiers: notificationIdentifiers,
                 calendarReference: calendarReference
             )
@@ -250,9 +269,11 @@ public final class ReminderSchedulingCoordinator {
 
     private func compensate(
         reminderID: UUID,
+        notificationResult: ReminderExecutionResult,
+        calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
         calendarReference: CalendarEventReference?
-    ) {
+    ) throws {
         let record = try? repository.reminder(id: reminderID)
         let persistedCalendarReference = record?.calendarEventIdentifier.map {
             CalendarEventReference(
@@ -260,16 +281,33 @@ public final class ReminderSchedulingCoordinator {
                 externalIdentifier: record?.calendarExternalIdentifier
             )
         }
-        if let calendarReference = calendarReference ?? persistedCalendarReference {
-            try? calendarClient.removeEvent(reference: calendarReference)
-        }
         let identifiers = stableUniqued(
             notificationIdentifiers + (record?.notificationIdentifiers ?? [])
         )
+        let recoveryReference = calendarReference ?? persistedCalendarReference
+        try? persist(
+            reminderID: reminderID,
+            status: .executing,
+            notificationResult: notificationResult,
+            calendarResult: calendarResult,
+            notificationIdentifiers: identifiers,
+            calendarReference: recoveryReference
+        )
+        var didFailCalendarCleanup = false
+        if let recoveryReference {
+            do {
+                try calendarClient.removeEvent(reference: recoveryReference)
+            } catch {
+                didFailCalendarCleanup = true
+            }
+        }
         if !identifiers.isEmpty {
             notificationClient.removePendingRequests(withIdentifiers: identifiers)
         }
-        try? repository.resetReminderExecution(id: reminderID)
+        guard !didFailCalendarCleanup else {
+            throw ReminderSchedulingCoordinatorError.cleanupFailed
+        }
+        try repository.resetReminderExecution(id: reminderID)
     }
 
     private func stableUniqued(_ identifiers: [String]) -> [String] {

@@ -315,6 +315,66 @@ import UserNotifications
 }
 
 @MainActor
+@Test func cancelledTaskAfterCalendarAuthorizationStopsCreationAndCleansNotifications() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.calendar.suspendAuthorization()
+    let record = try fixture.makeRecord()
+    let confirmTask = Task {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+    await fixture.calendar.waitUntilAuthorizationRequested()
+
+    confirmTask.cancel()
+    fixture.calendar.resumeAuthorization()
+
+    await #expect(throws: CancellationError.self) {
+        try await confirmTask.value
+    }
+    #expect(fixture.calendar.createEventCount == 0)
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.notificationIdentifiers.isEmpty)
+}
+
+@MainActor
+@Test func calendarCleanupFailureDuringCompensationPreservesRecoveryHandles() async throws {
+    let fixture = try CoordinatorFixture()
+    fixture.calendar.removeError = FixtureError.failed
+    let persistence = FailingReminderPersistence(
+        repository: fixture.repository,
+        failUpdateCall: 3
+    )
+    let coordinator = fixture.makeCoordinator(repository: persistence)
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: ReminderSchedulingCoordinatorError.cleanupFailed) {
+        try await coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
+    #expect(record.calendarEventIdentifier == "event-1")
+    #expect(record.calendarExternalIdentifier == "external-1")
+}
+
+@MainActor
+@Test func recoverInterruptedExecutionCleanupFailurePreservesRecoveryHandles() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeExecutingRecord()
+    fixture.calendar.removeError = FixtureError.failed
+
+    #expect(throws: FixtureError.failed) {
+        try fixture.coordinator.recoverInterruptedExecution(reminderID: record.id)
+    }
+
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
+    #expect(record.calendarEventIdentifier == "event-1")
+}
+
+@MainActor
 private final class CoordinatorFixture {
     let repository: DiaryRepository
     let notifications = NotificationClientSpy()
@@ -439,9 +499,19 @@ private final class CalendarClientSpy: CalendarClient {
     var authorizationRequestCount = 0
     var createEventCount = 0
     var removedReferences: [CalendarEventReference] = []
+    private var shouldSuspendAuthorization = false
+    private var authorizationContinuation: CheckedContinuation<Void, Never>?
+    private var requestWaiters: [CheckedContinuation<Void, Never>] = []
 
     func requestFullAccess() async throws -> Bool {
         authorizationRequestCount += 1
+        requestWaiters.forEach { $0.resume() }
+        requestWaiters = []
+        if shouldSuspendAuthorization {
+            await withCheckedContinuation { continuation in
+                authorizationContinuation = continuation
+            }
+        }
         if let requestAuthorizationError {
             throw requestAuthorizationError
         }
@@ -462,6 +532,25 @@ private final class CalendarClientSpy: CalendarClient {
         if let removeError {
             throw removeError
         }
+    }
+
+    func suspendAuthorization() {
+        shouldSuspendAuthorization = true
+    }
+
+    func waitUntilAuthorizationRequested() async {
+        guard authorizationRequestCount == 0 else {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            requestWaiters.append(continuation)
+        }
+    }
+
+    func resumeAuthorization() {
+        shouldSuspendAuthorization = false
+        authorizationContinuation?.resume()
+        authorizationContinuation = nil
     }
 }
 
