@@ -4,6 +4,7 @@ import SwiftUI
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.vesperLocalization) private var localization
     @Query(sort: \MessageRecord.createdAt)
     private var messages: [MessageRecord]
     @Query(sort: \ReminderRecord.fireDate)
@@ -19,9 +20,9 @@ struct ChatView: View {
             Group {
                 if visibleMessages.isEmpty {
                     ContentUnavailableView(
-                        "开始对话",
+                        localization.strings.startConversation,
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text("连接 AI Provider 后，通过自然语言记录生活。")
+                        description: Text(localization.strings.startConversationDescription)
                     )
                 } else {
                     ScrollView {
@@ -60,18 +61,18 @@ struct ChatView: View {
                 }
             }
         }
-        .navigationTitle("对话")
+        .navigationTitle(localization.strings.chat)
         .safeAreaInset(edge: .bottom) {
             composer
         }
         .alert(
-            "发送失败",
+            localization.strings.sendFailed,
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("好", role: .cancel) {}
+            Button(localization.strings.ok, role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -89,7 +90,7 @@ struct ChatView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("输入自然语言要求", text: $draft, axis: .vertical)
+            TextField(localization.strings.naturalLanguagePlaceholder, text: $draft, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.roundedBorder)
                 .disabled(isSending)
@@ -127,7 +128,7 @@ struct ChatView: View {
     @MainActor
     private func streamReply(to text: String) async {
         isSending = true
-        statusText = "正在连接 AI Provider"
+        statusText = localization.strings.connectingProvider
         defer {
             isSending = false
             statusText = nil
@@ -164,7 +165,7 @@ struct ChatView: View {
             var assistantMessageID: UUID?
             var reminderBuffer = ReminderProposalStreamBuffer()
 
-            statusText = "正在生成回复"
+            statusText = localization.strings.generatingReply
             streamLoop:
             for try await event in stream {
                 switch event {
@@ -182,7 +183,7 @@ struct ChatView: View {
                         of: assistantMessageID!
                     )
                 case .reasoningDelta:
-                    statusText = "正在思考"
+                    statusText = localization.strings.thinking
                 case .done:
                     break streamLoop
                 }
@@ -219,7 +220,7 @@ struct ChatView: View {
                 }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = localizedMessage(for: error)
         }
     }
 
@@ -228,7 +229,13 @@ struct ChatView: View {
             ChatMessage(
                 role: .system,
                 content: """
-                你是一个简洁可靠的个人日记助手。请使用中文回答。
+                You are Vesper, a concise and reliable private assistant.
+                \(VesperAIReplyLanguage.instruction(
+                    appLanguage: localization.language,
+                    latestUserText: records.last(
+                        where: { $0.role == ChatRole.user.rawValue }
+                    )?.content ?? ""
+                ))
                 \(ReminderAssistantPrompt.systemInstruction(
                     now: Date(),
                     timeZone: .current
@@ -289,7 +296,7 @@ struct ChatView: View {
                     try coordinator.recoverInterruptedExecution(reminderID: reminder.id)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = localizedMessage(for: error)
             }
         }
     }
@@ -308,6 +315,29 @@ struct ChatView: View {
             notificationClient: UserNotificationCenterClient(),
             calendarClient: calendarClient
         ).edit(reminderID: reminderID, proposal: resolvedProposal)
+    }
+
+    private func localizedMessage(for error: Error) -> String {
+        if let error = error as? ReminderProposalValidationError {
+            return error.localizedDescription(language: localization.language)
+        }
+        if let error = error as? ReminderAutoSchedulingError {
+            return error.localizedDescription(language: localization.language)
+        }
+        if let error = error as? ProviderStreamError {
+            return error.localizedDescription(language: localization.language)
+        }
+        guard let error = error as? ChatViewError else {
+            return error.localizedDescription
+        }
+        return switch error {
+        case .noSupportedProvider:
+            localization.strings.noSupportedProvider
+        case .missingAPIKey:
+            localization.strings.missingAPIKey
+        case let .invalidStoredRole(role):
+            localization.strings.invalidStoredRole(role)
+        }
     }
 }
 
@@ -345,21 +375,10 @@ private struct ChatBubble: View {
     }
 }
 
-private enum ChatViewError: LocalizedError {
+private enum ChatViewError: Error {
     case noSupportedProvider
     case missingAPIKey
     case invalidStoredRole(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .noSupportedProvider:
-            "请先在设置中添加并启用 DeepSeek、硅基流动或 Custom Provider。"
-        case .missingAPIKey:
-            "当前 Provider 没有可用的 API Key，请在设置中重新保存。"
-        case let .invalidStoredRole(role):
-            "本地消息角色无效：\(role)"
-        }
-    }
 }
 
 private extension ProviderProfile {

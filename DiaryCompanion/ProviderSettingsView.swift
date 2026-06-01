@@ -4,16 +4,19 @@ import SwiftUI
 
 struct ProviderSettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.vesperLocalization) private var localization
     @Query(sort: \ProviderProfileRecord.displayName)
     private var profiles: [ProviderProfileRecord]
     @State private var isAddingProfile = false
     @State private var errorMessage: String?
+    @AppStorage("vesper.appLanguage")
+    private var appLanguageRawValue = VesperLanguage.followSystem.rawValue
 
     var body: some View {
         List {
-            Section("AI Provider") {
+            Section(localization.strings.aiProvider) {
                 if profiles.isEmpty {
-                    Text("尚未配置")
+                    Text(localization.strings.notConfigured)
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(profiles) { profile in
@@ -23,14 +26,27 @@ struct ProviderSettingsView: View {
                 }
             }
 
-            Section("权限") {
-                LabeledContent("默认策略", value: "执行前确认")
+            Section(localization.strings.appLanguage) {
+                Picker(localization.strings.appLanguage, selection: $appLanguageRawValue) {
+                    ForEach(VesperLanguage.allCases, id: \.rawValue) { language in
+                        Text(localization.strings.languageName(language))
+                            .tag(language.rawValue)
+                    }
+                }
+                .labelsHidden()
+            }
+
+            Section(localization.strings.permissions) {
+                LabeledContent(
+                    localization.strings.defaultPolicy,
+                    value: localization.strings.confirmBeforeExecution
+                )
             }
         }
-        .navigationTitle("设置")
+        .navigationTitle(localization.strings.settings)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("新增 Provider", systemImage: "plus") {
+                Button(localization.strings.addProvider, systemImage: "plus") {
                     isAddingProfile = true
                 }
             }
@@ -44,13 +60,13 @@ struct ProviderSettingsView: View {
             }
         }
         .alert(
-            "操作失败",
+            localization.strings.operationFailed,
             isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )
         ) {
-            Button("好", role: .cancel) {}
+            Button(localization.strings.ok, role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
         }
@@ -94,6 +110,7 @@ private struct ProviderProfileRow: View {
 
 private struct ProviderProfileFormView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.vesperLocalization) private var localization
     @State private var selectedPreset = ProviderPreset.openAI
     @State private var displayName = ProviderPreset.openAI.displayName
     @State private var baseURL = ProviderPreset.openAI.defaultBaseURL?.absoluteString ?? ""
@@ -108,35 +125,35 @@ private struct ProviderProfileFormView: View {
 
     var body: some View {
         Form {
-            Section("Provider") {
-                Picker("平台", selection: $selectedPreset) {
+            Section(localization.strings.provider) {
+                Picker(localization.strings.platform, selection: $selectedPreset) {
                     ForEach(ProviderPreset.allCases) { preset in
                         Text(preset.displayName).tag(preset)
                     }
                 }
-                TextField("显示名称", text: $displayName)
-                TextField("Base URL（基础地址）", text: $baseURL)
+                TextField(localization.strings.displayName, text: $displayName)
+                TextField(localization.strings.baseURL, text: $baseURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                LabeledContent("实际 Endpoint") {
+                LabeledContent(localization.strings.actualEndpoint) {
                     Text(endpointPreview)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.trailing)
                 }
-                TextField("模型名称", text: $modelName)
+                TextField(localization.strings.modelName, text: $modelName)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 SecureField("API Key", text: $apiKey)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                Toggle("启用", isOn: $isEnabled)
+                Toggle(localization.strings.enabled, isOn: $isEnabled)
             }
 
             Section {
                 Button(action: testConnection) {
                     HStack {
-                        Text("测试连接")
+                        Text(localization.strings.testConnection)
                         Spacer()
                         if isTestingConnection {
                             ProgressView()
@@ -151,7 +168,7 @@ private struct ProviderProfileFormView: View {
                         .foregroundStyle(.secondary)
                 }
             } footer: {
-                Text("Base URL 是服务基础地址。应用会自动追加平台对应路径，例如 DeepSeek 会请求 /chat/completions。")
+                Text(localization.strings.endpointFooter)
             }
 
             if let validationMessage {
@@ -161,16 +178,16 @@ private struct ProviderProfileFormView: View {
                 }
             }
         }
-        .navigationTitle("新增 Provider")
+        .navigationTitle(localization.strings.addProvider)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("取消") {
+                Button(localization.strings.cancel) {
                     dismiss()
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("保存", action: save)
+                Button(localization.strings.save, action: save)
             }
         }
         .onChange(of: selectedPreset) { _, preset in
@@ -209,12 +226,14 @@ private struct ProviderProfileFormView: View {
                         apiKey: key
                     )
                     await MainActor.run {
-                        connectionMessage = "连接成功：\(result.preview)"
+                        connectionMessage = localization.strings.connectionSucceeded(result.preview)
                         isTestingConnection = false
                     }
                 } catch {
                     await MainActor.run {
-                        connectionMessage = "连接失败：\(error.localizedDescription)"
+                        connectionMessage = localization.strings.connectionFailed(
+                            localizedMessage(for: error)
+                        )
                         isTestingConnection = false
                     }
                 }
@@ -222,6 +241,16 @@ private struct ProviderProfileFormView: View {
         } catch {
             validationMessage = error.localizedDescription
         }
+    }
+
+    private func localizedMessage(for error: Error) -> String {
+        if let error = error as? ProviderConnectionTestError {
+            return error.localizedDescription(language: localization.language)
+        }
+        if let error = error as? ProviderStreamError {
+            return error.localizedDescription(language: localization.language)
+        }
+        return error.localizedDescription
     }
 
     private var endpointPreview: String {
@@ -235,7 +264,7 @@ private struct ProviderProfileFormView: View {
                 )
                 .absoluteString
         } catch {
-            return "请先填写有效配置"
+            return localization.strings.invalidConfiguration
         }
     }
 
@@ -243,11 +272,11 @@ private struct ProviderProfileFormView: View {
         requireAPIKey: Bool = true,
         requireModel: Bool = true
     ) throws -> ProviderProfile {
-        let name = try required(displayName, field: "显示名称")
+        let name = try required(displayName, field: localization.strings.displayName)
         let urlString = try required(baseURL, field: "Base URL")
         let url = try validBaseURL(urlString)
         let model = requireModel
-            ? try required(modelName, field: "模型名称")
+            ? try required(modelName, field: localization.strings.modelName)
             : modelName.trimmingCharacters(in: .whitespacesAndNewlines)
         if requireAPIKey {
             _ = try required(apiKey, field: "API Key")
@@ -264,7 +293,9 @@ private struct ProviderProfileFormView: View {
     private func required(_ value: String, field: String) throws -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            throw ProviderSettingsError.required(field)
+            throw ProviderSettingsError.required(
+                localization.strings.required(field)
+            )
         }
         return trimmed
     }
@@ -275,7 +306,9 @@ private struct ProviderProfileFormView: View {
               ["http", "https"].contains(scheme),
               url.host != nil
         else {
-            throw ProviderSettingsError.invalidBaseURL
+            throw ProviderSettingsError.invalidBaseURL(
+                localization.strings.invalidBaseURL
+            )
         }
         return url
     }
@@ -283,14 +316,12 @@ private struct ProviderProfileFormView: View {
 
 private enum ProviderSettingsError: LocalizedError {
     case required(String)
-    case invalidBaseURL
+    case invalidBaseURL(String)
 
     var errorDescription: String? {
         switch self {
-        case let .required(field):
-            "\(field)不能为空。"
-        case .invalidBaseURL:
-            "请输入有效的 HTTP 或 HTTPS Base URL。"
+        case let .required(message), let .invalidBaseURL(message):
+            message
         }
     }
 }

@@ -2,6 +2,7 @@ import DiaryCompanionCore
 import SwiftUI
 
 struct ReminderProposalCard: View {
+    @Environment(\.vesperLocalization) private var localization
     let reminder: ReminderRecord
     let proposal: ReminderProposal?
     let action: (ReminderCardAction) -> Void
@@ -12,38 +13,38 @@ struct ReminderProposalCard: View {
 
             VStack(spacing: 0) {
                 detailRow(
-                    title: "安排方式",
+                    title: localization.strings.schedulingMode,
                     value: schedulingModeText,
                     systemImage: "calendar.badge.clock"
                 )
                 Divider()
                 detailRow(
-                    title: "提醒时间",
+                    title: localization.strings.reminderTime,
                     value: scheduleText,
                     systemImage: "bell"
                 )
                 Divider()
                 detailRow(
-                    title: "重复规则",
+                    title: localization.strings.recurrence,
                     value: recurrenceText,
                     systemImage: "arrow.trianglehead.2.clockwise"
                 )
                 Divider()
                 detailRow(
-                    title: "事件持续时间",
-                    value: "\(reminder.durationMinutes) 分钟",
+                    title: localization.strings.eventDuration,
+                    value: localization.strings.durationMinutes(reminder.durationMinutes),
                     systemImage: "hourglass"
                 )
                 Divider()
                 detailRow(
-                    title: "系统通知",
-                    value: reminder.notificationEnabled ? "开启" : "关闭",
+                    title: localization.strings.systemNotification,
+                    value: reminder.notificationEnabled ? localization.strings.on : localization.strings.off,
                     systemImage: "bell.badge"
                 )
                 Divider()
                 detailRow(
-                    title: "同步到日历",
-                    value: reminder.calendarEnabled ? "开启" : "关闭",
+                    title: localization.strings.addToCalendar,
+                    value: reminder.calendarEnabled ? localization.strings.on : localization.strings.off,
                     systemImage: "calendar.badge.plus"
                 )
             }
@@ -144,16 +145,16 @@ struct ReminderProposalCard: View {
         switch status {
         case .pendingConfirmation:
             if needsAutomaticPlacement {
-                Label("正在等待自动排期", systemImage: "calendar.badge.clock")
+                Label(localization.strings.waitingForAutomaticPlacement, systemImage: "calendar.badge.clock")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.orange)
             } else {
                 HStack {
-                    Button("取消", role: .cancel) {
+                    Button(localization.strings.cancel, role: .cancel) {
                         action(.cancel)
                     }
                     Spacer()
-                    Button("确认创建") {
+                    Button(localization.strings.confirmCreation) {
                         action(.confirm)
                     }
                     .buttonStyle(.borderedProminent)
@@ -162,31 +163,31 @@ struct ReminderProposalCard: View {
         case .executing:
             HStack {
                 ProgressView()
-                Text("创建被中断，可恢复后重试")
+                Text(localization.strings.interruptedCreation)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("恢复") {
+                Button(localization.strings.recover) {
                     action(.recover)
                 }
                 .buttonStyle(.bordered)
             }
         case .scheduled:
             HStack {
-                Label("已创建", systemImage: "checkmark.circle.fill")
+                Label(localization.strings.created, systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                 Spacer()
-                Button("取消提醒", role: .destructive) {
+                Button(localization.strings.cancelReminder, role: .destructive) {
                     action(.cancel)
                 }
             }
             .font(.subheadline.weight(.medium))
         case .cancelled:
-            Label("已取消", systemImage: "xmark.circle")
+            Label(localization.strings.cancelled, systemImage: "xmark.circle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         case nil:
-            Label("提醒状态异常", systemImage: "exclamationmark.triangle")
+            Label(localization.strings.invalidReminderStatus, systemImage: "exclamationmark.triangle")
                 .font(.subheadline)
                 .foregroundStyle(.red)
         }
@@ -208,15 +209,15 @@ struct ReminderProposalCard: View {
     private var statusTitle: String {
         switch status {
         case .pendingConfirmation:
-            "AI 建议创建提醒"
+            localization.strings.suggestedReminder
         case .executing:
-            "正在创建提醒"
+            localization.strings.creatingReminder
         case .scheduled:
-            "提醒已创建"
+            localization.strings.reminderCreated
         case .cancelled:
-            "提醒已取消"
+            localization.strings.reminderCancelled
         case nil:
-            "提醒状态异常"
+            localization.strings.invalidReminderStatus
         }
     }
 
@@ -236,28 +237,83 @@ struct ReminderProposalCard: View {
     private var scheduleText: String {
         if let firstOccurrence = reminder.firstOccurrence {
             return firstOccurrence.formatted(
-                date: .abbreviated,
-                time: .shortened
+                Date.FormatStyle(date: .abbreviated, time: .shortened)
+                    .locale(localization.locale)
             )
         }
         if let start = reminder.searchWindowStart,
            let end = reminder.searchWindowEnd {
-            return "自动安排：\(start.formatted(date: .abbreviated, time: .shortened)) - \(end.formatted(date: .omitted, time: .shortened))"
+            return localization.strings.automaticRange(
+                start.formatted(
+                    Date.FormatStyle(date: .abbreviated, time: .shortened)
+                        .locale(localization.locale)
+                ),
+                end.formatted(
+                    Date.FormatStyle(date: .omitted, time: .shortened)
+                        .locale(localization.locale)
+                )
+            )
         }
-        return "等待补充时间"
+        return localization.strings.waitingForTime
     }
 
     private var schedulingModeText: String {
         reminder.schedulingMode == ReminderSchedulingMode.findFreeTime.rawValue
-            ? "自动安排到空闲时间"
-            : "固定时间"
+            ? localization.strings.automaticScheduling
+            : localization.strings.fixedTime
     }
 
     private var recurrenceText: String {
         guard let proposal else {
-            return reminder.repeats ? "重复提醒" : "仅一次"
+            return reminder.repeats ? localization.strings.repeatingReminder : localization.strings.once
         }
-        return ReminderProposalEditorSupport.recurrenceSummary(proposal.recurrence)
+        return recurrenceSummary(proposal.recurrence)
+    }
+
+    private func recurrenceSummary(_ rule: ReminderRecurrenceRule) -> String {
+        switch rule {
+        case .once:
+            localization.strings.once
+        case let .daily(interval, end):
+            recurrenceSummary(base: localization.strings.daily, interval: interval, end: end)
+        case let .weekly(interval, weekdays, end):
+            recurrenceSummary(
+                base: "\(localization.strings.weekly): \(weekdays.map(localization.strings.weekday).joined(separator: ", "))",
+                interval: interval,
+                end: end
+            )
+        case let .monthly(interval, day, end):
+            recurrenceSummary(base: localization.strings.monthlyDay(day), interval: interval, end: end)
+        case let .monthlyLastDay(interval, end):
+            recurrenceSummary(base: localization.strings.monthlyLastDay, interval: interval, end: end)
+        case let .yearly(interval, month, day, end):
+            recurrenceSummary(base: "\(localization.strings.month(month)), \(localization.strings.day(day))", interval: interval, end: end)
+        }
+    }
+
+    private func recurrenceSummary(
+        base: String,
+        interval: Int,
+        end: ReminderRecurrenceEnd?
+    ) -> String {
+        var parts = [base]
+        if interval > 1 {
+            parts.append(localization.strings.interval(interval))
+        }
+        if case let .occurrenceCount(count) = end {
+            parts.append(localization.strings.recurrenceOccurrences(count))
+        }
+        if case let .date(date) = end {
+            parts.append(
+                localization.strings.recurrenceUntil(
+                    date.formatted(
+                        Date.FormatStyle(date: .abbreviated, time: .omitted)
+                            .locale(localization.locale)
+                    )
+                )
+            )
+        }
+        return parts.joined(separator: localization.language == .simplifiedChinese ? "，" : ", ")
     }
 }
 

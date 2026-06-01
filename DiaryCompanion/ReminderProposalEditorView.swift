@@ -6,6 +6,7 @@ struct ReminderProposalEditorView: View {
     let save: (ReminderProposal) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.vesperLocalization) private var localization
     @State private var draft: ReminderEditorDraft
     @State private var isSaving = false
     @State private var errorMessage: String?
@@ -40,17 +41,17 @@ struct ReminderProposalEditorView: View {
                     }
                 }
             }
-            .navigationTitle("编辑提醒")
+            .navigationTitle(localization.strings.editReminder)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(localization.strings.cancel) {
                         dismiss()
                     }
                     .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(localization.strings.save) {
                         Task {
                             await saveDraft()
                         }
@@ -62,12 +63,12 @@ struct ReminderProposalEditorView: View {
     }
 
     private var basicsSection: some View {
-        Section("提醒内容") {
-            TextField("标题", text: $draft.title)
-            TextField("备注", text: $draft.notes, axis: .vertical)
+        Section(localization.strings.reminderContent) {
+            TextField(localization.strings.title, text: $draft.title)
+            TextField(localization.strings.notes, text: $draft.notes, axis: .vertical)
                 .lineLimit(2...5)
             Stepper(
-                "事件持续时间：\(draft.durationMinutes) 分钟",
+                localization.strings.durationStepper(draft.durationMinutes),
                 value: $draft.durationMinutes,
                 in: 1...1_440,
                 step: 5
@@ -76,29 +77,29 @@ struct ReminderProposalEditorView: View {
     }
 
     private var schedulingSection: some View {
-        Section("安排方式") {
-            Picker("方式", selection: $draft.schedulingMode) {
-                Text("固定时间").tag(ReminderSchedulingMode.fixed)
-                Text("自动安排到空闲时间").tag(ReminderSchedulingMode.findFreeTime)
+        Section(localization.strings.schedulingMode) {
+            Picker(localization.strings.schedulingMode, selection: $draft.schedulingMode) {
+                Text(localization.strings.fixedTime).tag(ReminderSchedulingMode.fixed)
+                Text(localization.strings.automaticScheduling).tag(ReminderSchedulingMode.findFreeTime)
             }
             if draft.schedulingMode == .fixed {
                 DatePicker(
-                    "提醒时间",
+                    localization.strings.reminderTime,
                     selection: $draft.start,
                     displayedComponents: [.date, .hourAndMinute]
                 )
             } else {
                 DatePicker(
-                    "范围开始",
+                    localization.strings.rangeStart,
                     selection: $draft.searchWindowStart,
                     displayedComponents: [.date, .hourAndMinute]
                 )
                 DatePicker(
-                    "范围结束",
+                    localization.strings.rangeEnd,
                     selection: $draft.searchWindowEnd,
                     displayedComponents: [.date, .hourAndMinute]
                 )
-                Text("保存后会读取所有可见日历，并选择最早可用时段。")
+                Text(localization.strings.automaticSchedulingFooter)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -106,22 +107,22 @@ struct ReminderProposalEditorView: View {
     }
 
     private var recurrenceSection: some View {
-        Section("重复规则") {
-            Picker("频率", selection: $draft.recurrenceKind) {
+        Section(localization.strings.recurrence) {
+            Picker(localization.strings.frequency, selection: $draft.recurrenceKind) {
                 ForEach(ReminderEditorRecurrenceKind.allCases) { kind in
-                    Text(kind.title).tag(kind)
+                    Text(kind.title(using: localization.strings)).tag(kind)
                 }
             }
             if draft.recurrenceKind != .once {
                 Stepper(
-                    "间隔：\(draft.interval)",
+                    localization.strings.interval(draft.interval),
                     value: $draft.interval,
                     in: 1...365
                 )
-                Toggle("限制重复次数", isOn: $draft.hasOccurrenceCount)
+                Toggle(localization.strings.limitOccurrences, isOn: $draft.hasOccurrenceCount)
                 if draft.hasOccurrenceCount {
                     Stepper(
-                        "总次数：\(draft.occurrenceCount)",
+                        localization.strings.totalOccurrences(draft.occurrenceCount),
                         value: $draft.occurrenceCount,
                         in: 1...10_000
                     )
@@ -139,22 +140,22 @@ struct ReminderProposalEditorView: View {
         case .weekly:
             ForEach(ReminderWeekday.allCases, id: \.rawValue) { weekday in
                 Toggle(
-                    ReminderEditorDraft.weekdayTitle(weekday),
+                    localization.strings.weekday(weekday),
                     isOn: weekdayBinding(weekday)
                 )
             }
         case .monthly:
-            Stepper("每月第 \(draft.monthlyDay) 日", value: $draft.monthlyDay, in: 1...31)
+            Stepper(localization.strings.monthlyDay(draft.monthlyDay), value: $draft.monthlyDay, in: 1...31)
         case .yearly:
-            Stepper("月份：\(draft.yearlyMonth)", value: $draft.yearlyMonth, in: 1...12)
-            Stepper("日期：\(draft.yearlyDay)", value: $draft.yearlyDay, in: 1...31)
+            Stepper(localization.strings.month(draft.yearlyMonth), value: $draft.yearlyMonth, in: 1...12)
+            Stepper(localization.strings.day(draft.yearlyDay), value: $draft.yearlyDay, in: 1...31)
         }
     }
 
     private var outputSection: some View {
-        Section("创建内容") {
-            Toggle("系统通知（声音与震动）", isOn: $draft.notificationEnabled)
-            Toggle("同步到日历", isOn: $draft.calendarEnabled)
+        Section(localization.strings.createOutputs) {
+            Toggle(localization.strings.soundAndVibration, isOn: $draft.notificationEnabled)
+            Toggle(localization.strings.addToCalendar, isOn: $draft.calendarEnabled)
         }
     }
 
@@ -184,7 +185,13 @@ struct ReminderProposalEditorView: View {
             try await save(proposal)
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            if let error = error as? ReminderProposalValidationError {
+                errorMessage = error.localizedDescription(language: localization.language)
+            } else if let error = error as? ReminderAutoSchedulingError {
+                errorMessage = error.localizedDescription(language: localization.language)
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
@@ -201,20 +208,20 @@ private enum ReminderEditorRecurrenceKind: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    var title: String {
+    func title(using strings: VesperStrings) -> String {
         switch self {
         case .once:
-            "仅一次"
+            strings.once
         case .daily:
-            "每天"
+            strings.daily
         case .weekly:
-            "每周"
+            strings.weekly
         case .monthly:
-            "每月指定日期"
+            strings.monthly
         case .monthlyLastDay:
-            "每月最后一天"
+            strings.monthlyLastDay
         case .yearly:
-            "每年"
+            strings.yearly
         }
     }
 }
@@ -322,12 +329,6 @@ private struct ReminderEditorDraft {
         )
         try proposal.validate()
         return proposal
-    }
-
-    static func weekdayTitle(_ weekday: ReminderWeekday) -> String {
-        ReminderProposalEditorSupport.recurrenceSummary(
-            .weekly(interval: 1, weekdays: [weekday], end: nil)
-        ).replacingOccurrences(of: "每周，", with: "")
     }
 
     private var recurrence: ReminderRecurrenceRule {

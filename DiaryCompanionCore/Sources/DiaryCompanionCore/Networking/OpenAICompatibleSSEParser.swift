@@ -13,6 +13,33 @@ public enum ProviderStreamError: Error, Equatable, Sendable {
     case unsupportedProtocol(ProviderProtocolKind)
 }
 
+extension ProviderStreamError: LocalizedError {
+    public var errorDescription: String? {
+        localizedDescription(language: .simplifiedChinese)
+    }
+
+    public func localizedDescription(language: VesperSupportedLanguage) -> String {
+        switch (language, self) {
+        case (.simplifiedChinese, .invalidEventData):
+            "AI 服务返回了无法解析的数据。"
+        case (.simplifiedChinese, .invalidResponse):
+            "AI 服务返回了无效响应，请检查 Endpoint。"
+        case let (.simplifiedChinese, .httpStatus(statusCode)):
+            "AI 服务请求失败（HTTP \(statusCode)），请检查 API Key、Endpoint 和模型名称。"
+        case (.simplifiedChinese, .unsupportedProtocol):
+            "当前对话暂不支持所选服务商协议。"
+        case (.english, .invalidEventData):
+            "The AI service returned data that could not be parsed."
+        case (.english, .invalidResponse):
+            "The AI service returned an invalid response. Check the endpoint."
+        case let (.english, .httpStatus(statusCode)):
+            "The AI service request failed (HTTP \(statusCode)). Check the API key, endpoint, and model name."
+        case (.english, .unsupportedProtocol):
+            "Chat does not support the selected provider protocol yet."
+        }
+    }
+}
+
 public struct OpenAICompatibleSSEParser: Sendable {
     public init() {}
 

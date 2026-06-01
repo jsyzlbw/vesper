@@ -15,11 +15,19 @@ public enum ProviderConnectionTestError: Error, Equatable, Sendable {
 
 extension ProviderConnectionTestError: LocalizedError {
     public var errorDescription: String? {
-        switch self {
-        case .emptyResponse:
+        localizedDescription(language: .simplifiedChinese)
+    }
+
+    public func localizedDescription(language: VesperSupportedLanguage) -> String {
+        switch (language, self) {
+        case (.simplifiedChinese, .emptyResponse):
             "服务已响应，但没有返回文本。"
-        case .timedOut:
+        case (.simplifiedChinese, .timedOut):
             "连接测试超时，请检查网络、Base URL 和模型名称。"
+        case (.english, .emptyResponse):
+            "The service responded but did not return any text."
+        case (.english, .timedOut):
+            "The connection test timed out. Check the network, base URL, and model name."
         }
     }
 }
@@ -83,7 +91,7 @@ public struct ProviderConnectionTester: Sendable {
         let stream = try await streamEvents(
             profile,
             apiKey,
-            [.init(role: .user, content: "请只回复：连接成功")]
+            [.init(role: .user, content: "Reply only with: connected")]
         )
         var preview = ""
 

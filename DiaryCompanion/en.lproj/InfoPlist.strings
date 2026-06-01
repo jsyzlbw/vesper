@@ -1,0 +1,2 @@
+"NSCalendarsFullAccessUsageDescription" = "Read existing schedules and create reminder events after you confirm.";
+"NSCalendarsWriteOnlyAccessUsageDescription" = "Add reminders to your system calendar after you confirm.";

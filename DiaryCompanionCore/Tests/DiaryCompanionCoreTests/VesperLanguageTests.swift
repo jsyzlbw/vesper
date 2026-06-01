@@ -67,3 +67,42 @@ func detectsChineseHanCharacters(text: String, expected: Bool) {
         ).contains("简体中文")
     )
 }
+
+@Test func localizesReminderValidationError() {
+    #expect(
+        ReminderProposalValidationError.emptyTitle
+            .localizedDescription(language: .english)
+            == "Reminder title cannot be empty."
+    )
+    #expect(
+        ReminderProposalValidationError.emptyTitle
+            .localizedDescription(language: .simplifiedChinese)
+            == "提醒标题不能为空。"
+    )
+}
+
+@Test func localizesAutomaticSchedulingError() {
+    #expect(
+        ReminderAutoSchedulingError.noAvailableSlot
+            .localizedDescription(language: .english)
+            == "No long-enough free slot was found in that time window. Try another range."
+    )
+    #expect(
+        ReminderAutoSchedulingError.noAvailableSlot
+            .localizedDescription(language: .simplifiedChinese)
+            == "指定时间范围内没有足够长的空档，请换一个范围后重试。"
+    )
+}
+
+@Test func localizesProviderErrors() {
+    #expect(
+        ProviderStreamError.httpStatus(401)
+            .localizedDescription(language: .english)
+            .contains("HTTP 401")
+    )
+    #expect(
+        ProviderConnectionTestError.timedOut
+            .localizedDescription(language: .simplifiedChinese)
+            .contains("连接测试超时")
+    )
+}

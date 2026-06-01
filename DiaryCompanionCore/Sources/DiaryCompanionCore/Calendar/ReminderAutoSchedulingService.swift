@@ -14,6 +14,18 @@ extension ReminderAutoSchedulingError: LocalizedError {
             "指定时间范围内没有足够长的空档，请换一个范围后重试。"
         }
     }
+
+    public func localizedDescription(language: VesperSupportedLanguage) -> String {
+        guard language == .english else {
+            return errorDescription ?? ""
+        }
+        return switch self {
+        case .calendarPermissionDenied:
+            "Automatic scheduling needs calendar access. Allow calendar access in Settings, then try again."
+        case .noAvailableSlot:
+            "No long-enough free slot was found in that time window. Try another range."
+        }
+    }
 }
 
 @MainActor

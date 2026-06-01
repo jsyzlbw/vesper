@@ -5,6 +5,7 @@ import SwiftUI
 struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.vesperLocalization) private var localization
 
     var body: some View {
         TabView {
@@ -12,34 +13,34 @@ struct RootTabView: View {
                 ChatView()
             }
             .tabItem {
-                Label("对话", systemImage: "bubble.left.and.bubble.right")
+                Label(localization.strings.chat, systemImage: "bubble.left.and.bubble.right")
             }
 
             NavigationStack {
                 TimelineView()
-                    .navigationTitle("时间线")
+                    .navigationTitle(localization.strings.timeline)
             }
             .tabItem {
-                Label("时间线", systemImage: "clock")
+                Label(localization.strings.timeline, systemImage: "clock")
             }
 
             NavigationStack {
                 ProviderSettingsView()
             }
             .tabItem {
-                Label("设置", systemImage: "gearshape")
+                Label(localization.strings.settings, systemImage: "gearshape")
             }
 
             NavigationStack {
                 ContentUnavailableView(
-                    "暂无审计记录",
+                    localization.strings.noAuditRecords,
                     systemImage: "checklist",
-                    description: Text("AI 的工具调用记录会显示在这里。")
+                    description: Text(localization.strings.auditDescription)
                 )
-                .navigationTitle("审计")
+                .navigationTitle(localization.strings.audit)
             }
             .tabItem {
-                Label("审计", systemImage: "checklist")
+                Label(localization.strings.audit, systemImage: "checklist")
             }
         }
         .task {
@@ -65,15 +66,16 @@ struct RootTabView: View {
 }
 
 private struct TimelineView: View {
+    @Environment(\.vesperLocalization) private var localization
     @Query(sort: \DiaryRecord.date, order: .reverse)
     private var entries: [DiaryRecord]
 
     var body: some View {
         if entries.isEmpty {
             ContentUnavailableView(
-                "暂无记录",
+                localization.strings.noTimelineRecords,
                 systemImage: "clock.arrow.circlepath",
-                description: Text("AI 保存的日记、任务和总结会出现在这里。")
+                description: Text(localization.strings.timelineDescription)
             )
         } else {
             List(entries) { entry in

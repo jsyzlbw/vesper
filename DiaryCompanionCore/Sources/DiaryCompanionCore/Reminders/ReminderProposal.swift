@@ -87,7 +87,7 @@ public enum ReminderProposalValidationError: Error, Equatable, Sendable {
 
 extension ReminderProposalValidationError: LocalizedError {
     public var errorDescription: String? {
-        switch self {
+        return switch self {
         case .emptyTitle:
             "提醒标题不能为空。"
         case .invalidDurationMinutes:
@@ -124,6 +124,52 @@ extension ReminderProposalValidationError: LocalizedError {
             "提醒开始时间不能早于当前时间。"
         case .searchWindowIsInThePast:
             "自动安排的时间范围不能完全落在过去。"
+        }
+    }
+
+    public func localizedDescription(
+        language: VesperSupportedLanguage
+    ) -> String {
+        guard language == .english else {
+            return errorDescription ?? ""
+        }
+        return switch self {
+        case .emptyTitle:
+            "Reminder title cannot be empty."
+        case .invalidDurationMinutes:
+            "Duration must be between 1 and 1440 minutes."
+        case .missingStart:
+            "Choose a reminder time."
+        case .missingSearchWindow:
+            "Choose a time window for automatic scheduling."
+        case .invalidSearchWindow:
+            "The automatic scheduling window must end after it starts."
+        case .searchWindowTooShort:
+            "The automatic scheduling window is shorter than the event duration."
+        case .invalidRecurrenceInterval:
+            "Repeat interval must be greater than 0."
+        case .emptyWeeklyWeekdays:
+            "Choose at least one weekday for a weekly reminder."
+        case .duplicateWeeklyWeekdays:
+            "The weekly reminder contains duplicate weekdays."
+        case .invalidMonthlyDay:
+            "Monthly reminder day must be between 1 and 31."
+        case .invalidYearlyMonth:
+            "Yearly reminder month must be between 1 and 12."
+        case .invalidYearlyDay:
+            "Yearly reminder day must be between 1 and 31."
+        case .invalidYearlyDate:
+            "The yearly reminder date does not exist."
+        case .invalidOccurrenceCount:
+            "Number of occurrences must be greater than 0."
+        case .invalidRecurrenceEndDate:
+            "Repeat end date cannot be earlier than the first reminder."
+        case .invalidFirstOccurrence:
+            "Reminder time does not match the repeat rule."
+        case .startIsInThePast:
+            "Reminder start time cannot be earlier than now."
+        case .searchWindowIsInThePast:
+            "The automatic scheduling window cannot be entirely in the past."
         }
     }
 }
