@@ -12,6 +12,7 @@ struct ChatView: View {
     @State private var isSending = false
     @State private var statusText: String?
     @State private var errorMessage: String?
+    @State private var editorPresentation: ReminderEditorPresentation?
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -31,7 +32,10 @@ struct ChatView: View {
                                         ChatBubble(message: message)
                                     }
                                     ForEach(reminders(for: message.id)) { reminder in
-                                        ReminderProposalCard(reminder: reminder) { action in
+                                        ReminderProposalCard(
+                                            reminder: reminder,
+                                            proposal: reminderProposal(for: reminder)
+                                        ) { action in
                                             handle(action, for: reminder)
                                         }
                                     }
@@ -70,6 +74,16 @@ struct ChatView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(errorMessage ?? "")
+        }
+        .sheet(item: $editorPresentation) { presentation in
+            ReminderProposalEditorView(
+                originalProposal: presentation.proposal
+            ) { proposal in
+                try await saveEditedProposal(
+                    proposal,
+                    reminderID: presentation.reminderID
+                )
+            }
         }
     }
 
@@ -234,6 +248,10 @@ struct ChatView: View {
         reminders.filter { $0.sourceMessageID == messageID }
     }
 
+    private func reminderProposal(for reminder: ReminderRecord) -> ReminderProposal? {
+        try? DiaryRepository(context: modelContext).reminderProposal(from: reminder)
+    }
+
     private func handle(_ action: ReminderCardAction, for reminder: ReminderRecord) {
         Task { @MainActor in
             do {
@@ -243,6 +261,12 @@ struct ChatView: View {
                     calendarClient: EventKitCalendarClient()
                 )
                 switch action {
+                case .edit:
+                    editorPresentation = ReminderEditorPresentation(
+                        reminderID: reminder.id,
+                        proposal: try DiaryRepository(context: modelContext)
+                            .reminderProposal(from: reminder)
+                    )
                 case .confirm:
                     try await coordinator.confirm(reminderID: reminder.id)
                     try await ReminderNotificationReplenisher(
@@ -258,6 +282,31 @@ struct ChatView: View {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    @MainActor
+    private func saveEditedProposal(
+        _ proposal: ReminderProposal,
+        reminderID: UUID
+    ) async throws {
+        let calendarClient = EventKitCalendarClient()
+        let resolvedProposal = try await ReminderAutoSchedulingService(
+            calendarClient: calendarClient
+        ).resolve(proposal)
+        try ReminderSchedulingCoordinator(
+            repository: DiaryRepository(context: modelContext),
+            notificationClient: UserNotificationCenterClient(),
+            calendarClient: calendarClient
+        ).edit(reminderID: reminderID, proposal: resolvedProposal)
+    }
+}
+
+private struct ReminderEditorPresentation: Identifiable {
+    let reminderID: UUID
+    let proposal: ReminderProposal
+
+    var id: UUID {
+        reminderID
     }
 }
 

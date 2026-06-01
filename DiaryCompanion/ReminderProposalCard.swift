@@ -3,30 +3,60 @@ import SwiftUI
 
 struct ReminderProposalCard: View {
     let reminder: ReminderRecord
+    let proposal: ReminderProposal?
     let action: (ReminderCardAction) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
 
-            VStack(alignment: .leading, spacing: 9) {
-                Label(scheduleText, systemImage: "calendar")
-                Label(recurrenceText, systemImage: "arrow.trianglehead.2.clockwise")
-                Label("\(reminder.durationMinutes) 分钟", systemImage: "clock")
-                if reminder.notificationEnabled {
-                    Label("系统通知：声音与震动", systemImage: "bell.badge")
-                }
-                if reminder.calendarEnabled {
-                    Label("同步到日历", systemImage: "calendar.badge.plus")
-                }
+            VStack(spacing: 0) {
+                detailRow(
+                    title: "安排方式",
+                    value: schedulingModeText,
+                    systemImage: "calendar.badge.clock"
+                )
+                Divider()
+                detailRow(
+                    title: "提醒时间",
+                    value: scheduleText,
+                    systemImage: "bell"
+                )
+                Divider()
+                detailRow(
+                    title: "重复规则",
+                    value: recurrenceText,
+                    systemImage: "arrow.trianglehead.2.clockwise"
+                )
+                Divider()
+                detailRow(
+                    title: "事件持续时间",
+                    value: "\(reminder.durationMinutes) 分钟",
+                    systemImage: "hourglass"
+                )
+                Divider()
+                detailRow(
+                    title: "系统通知",
+                    value: reminder.notificationEnabled ? "开启" : "关闭",
+                    systemImage: "bell.badge"
+                )
+                Divider()
+                detailRow(
+                    title: "同步到日历",
+                    value: reminder.calendarEnabled ? "开启" : "关闭",
+                    systemImage: "calendar.badge.plus"
+                )
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .background(Color(.tertiarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
 
             if !reminder.notes.isEmpty {
-                Text(reminder.notes)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                editableButton {
+                    Text(reminder.notes)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
 
             actionButtons
@@ -49,14 +79,63 @@ struct ReminderProposalCard: View {
                 .background(Color.accentColor.opacity(0.12))
                 .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(statusTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(statusColor)
-                Text(reminder.title)
-                    .font(.headline)
+            editableButton {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(statusTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(statusColor)
+                    Text(reminder.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                }
             }
             Spacer()
+        }
+    }
+
+    private func detailRow(
+        title: String,
+        value: String,
+        systemImage: String
+    ) -> some View {
+        editableButton {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                }
+                Spacer()
+                if canEdit {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+        }
+    }
+
+    @ViewBuilder
+    private func editableButton<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if canEdit {
+            Button {
+                action(.edit)
+            } label: {
+                content()
+            }
+            .buttonStyle(.plain)
+        } else {
+            content()
         }
     }
 
@@ -122,6 +201,10 @@ struct ReminderProposalCard: View {
             && reminder.firstOccurrence == nil
     }
 
+    private var canEdit: Bool {
+        status == .pendingConfirmation
+    }
+
     private var statusTitle: String {
         switch status {
         case .pendingConfirmation:
@@ -164,12 +247,22 @@ struct ReminderProposalCard: View {
         return "等待补充时间"
     }
 
+    private var schedulingModeText: String {
+        reminder.schedulingMode == ReminderSchedulingMode.findFreeTime.rawValue
+            ? "自动安排到空闲时间"
+            : "固定时间"
+    }
+
     private var recurrenceText: String {
-        reminder.repeats ? "重复提醒" : "仅一次"
+        guard let proposal else {
+            return reminder.repeats ? "重复提醒" : "仅一次"
+        }
+        return ReminderProposalEditorSupport.recurrenceSummary(proposal.recurrence)
     }
 }
 
 enum ReminderCardAction {
+    case edit
     case confirm
     case cancel
     case recover
