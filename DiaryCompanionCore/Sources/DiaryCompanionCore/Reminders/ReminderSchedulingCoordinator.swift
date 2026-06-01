@@ -124,6 +124,7 @@ public final class ReminderSchedulingCoordinator {
 
     public func edit(reminderID: UUID, proposal: ReminderProposal) throws {
         let record = try repository.reminder(id: reminderID)
+        try rejectExecuting(record)
         try removeOutputs(for: record)
         try repository.resetReminderExecution(id: reminderID)
         try repository.updateReminderProposal(id: reminderID, proposal: proposal)
@@ -131,9 +132,19 @@ public final class ReminderSchedulingCoordinator {
 
     public func cancel(reminderID: UUID) throws {
         let record = try repository.reminder(id: reminderID)
+        try rejectExecuting(record)
         try removeOutputs(for: record)
         try repository.resetReminderExecution(id: reminderID)
         try repository.cancelReminder(id: reminderID)
+    }
+
+    private func rejectExecuting(_ record: ReminderRecord) throws {
+        guard let status = ReminderProposalStatus(rawValue: record.status) else {
+            throw DiaryRepositoryError.invalidReminderStatus(record.status)
+        }
+        guard status != .executing else {
+            throw ReminderSchedulingCoordinatorError.invalidStatus(status)
+        }
     }
 
     private func removeOutputs(for record: ReminderRecord) throws {

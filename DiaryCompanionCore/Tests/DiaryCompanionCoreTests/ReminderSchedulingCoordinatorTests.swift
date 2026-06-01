@@ -151,6 +151,41 @@ import UserNotifications
 }
 
 @MainActor
+@Test func editRejectsExecutingReminderWithoutCleanupOrDatabaseMutation() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeExecutingRecord()
+
+    #expect(throws: ReminderSchedulingCoordinatorError.invalidStatus(.executing)) {
+        try fixture.coordinator.edit(
+            reminderID: record.id,
+            proposal: makeProposal(title: "Edited")
+        )
+    }
+
+    #expect(fixture.calendar.removedReferences.isEmpty)
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
+    #expect(record.calendarEventIdentifier == "event-1")
+}
+
+@MainActor
+@Test func cancelRejectsExecutingReminderWithoutCleanupOrDatabaseMutation() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeExecutingRecord()
+
+    #expect(throws: ReminderSchedulingCoordinatorError.invalidStatus(.executing)) {
+        try fixture.coordinator.cancel(reminderID: record.id)
+    }
+
+    #expect(fixture.calendar.removedReferences.isEmpty)
+    #expect(fixture.notifications.removedIdentifierBatches.isEmpty)
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.notificationIdentifiers == fixture.expectedNotificationIDs)
+    #expect(record.calendarEventIdentifier == "event-1")
+}
+
+@MainActor
 private final class CoordinatorFixture {
     let repository: DiaryRepository
     let notifications = NotificationClientSpy()
@@ -181,6 +216,20 @@ private final class CoordinatorFixture {
 
     func makeRecord() throws -> ReminderRecord {
         try repository.createReminderProposal(proposal, sourceMessageID: nil)
+    }
+
+    func makeExecutingRecord() throws -> ReminderRecord {
+        let record = try makeRecord()
+        try repository.updateReminderExecution(
+            id: record.id,
+            status: .executing,
+            notificationResult: .pending,
+            calendarResult: .pending,
+            notificationIdentifiers: expectedNotificationIDs,
+            calendarEventIdentifier: "event-1",
+            calendarExternalIdentifier: "external-1"
+        )
+        return record
     }
 }
 
