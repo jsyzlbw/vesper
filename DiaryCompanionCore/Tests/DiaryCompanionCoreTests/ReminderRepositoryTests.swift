@@ -22,6 +22,7 @@ import Testing
     #expect(fetched.calendarResult == ReminderExecutionResult.notRequested.rawValue)
     #expect(fetched.notificationIdentifiers.isEmpty)
     #expect(fetched.calendarEventIdentifier == nil)
+    #expect(fetched.calendarExternalIdentifier == nil)
     #expect(try repository.reminderProposal(from: fetched) == proposal)
 }
 
@@ -43,7 +44,8 @@ import Testing
             "notification-2",
             "notification-1",
         ],
-        calendarEventIdentifier: "calendar-1"
+        calendarEventIdentifier: "calendar-1",
+        calendarExternalIdentifier: "external-1"
     )
 
     let fetched = try #require(repository.fetchReminders().first)
@@ -52,6 +54,7 @@ import Testing
     #expect(fetched.calendarResult == ReminderExecutionResult.permissionDenied.rawValue)
     #expect(fetched.notificationIdentifiers == ["notification-1", "notification-2"])
     #expect(fetched.calendarEventIdentifier == "calendar-1")
+    #expect(fetched.calendarExternalIdentifier == "external-1")
 }
 
 @MainActor
@@ -249,7 +252,8 @@ import Testing
         notificationResult: .scheduled,
         calendarResult: .created,
         notificationIdentifiers: ["notification-1"],
-        calendarEventIdentifier: "calendar-1"
+        calendarEventIdentifier: "calendar-1",
+        calendarExternalIdentifier: "external-1"
     )
 
     try repository.resetReminderExecution(id: record.id)
@@ -259,6 +263,7 @@ import Testing
     #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
     #expect(record.notificationIdentifiers.isEmpty)
     #expect(record.calendarEventIdentifier == nil)
+    #expect(record.calendarExternalIdentifier == nil)
     #expect(record.isScheduled == false)
 }
 
@@ -324,6 +329,23 @@ import Testing
 
     #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
         try repository.cancelReminder(id: record.id)
+    }
+}
+
+@MainActor
+@Test func editingReminderWithCalendarExternalIdentifierRequiresExecutionReset() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    record.calendarExternalIdentifier = "external-1"
+
+    #expect(throws: DiaryRepositoryError.reminderRequiresExecutionReset(record.id)) {
+        try repository.updateReminderProposal(
+            id: record.id,
+            proposal: makeFixedProposal(start: Date(timeIntervalSince1970: 5_000))
+        )
     }
 }
 

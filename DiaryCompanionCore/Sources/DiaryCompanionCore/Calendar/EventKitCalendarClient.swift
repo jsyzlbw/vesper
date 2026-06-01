@@ -1,12 +1,24 @@
 import EventKit
 import Foundation
 
+public struct CalendarEventReference: Codable, Equatable, Sendable {
+    public var eventIdentifier: String
+    public var externalIdentifier: String?
+
+    public init(eventIdentifier: String, externalIdentifier: String?) {
+        self.eventIdentifier = eventIdentifier
+        self.externalIdentifier = externalIdentifier?.isEmpty == false
+            ? externalIdentifier
+            : nil
+    }
+}
+
 @MainActor
 public protocol CalendarClient: AnyObject {
     func requestFullAccess() async throws -> Bool
     func busyIntervals(in searchWindow: DateInterval) async throws -> [DateInterval]
-    func createEvent(for proposal: ReminderProposal) async throws -> String
-    func removeEvent(identifier: String) throws
+    func createEvent(for proposal: ReminderProposal) async throws -> CalendarEventReference
+    func removeEvent(reference: CalendarEventReference) throws
 }
 
 public enum EventKitCalendarClientError: Error, Equatable, Sendable {
@@ -14,6 +26,12 @@ public enum EventKitCalendarClientError: Error, Equatable, Sendable {
     case missingDefaultCalendar
     case missingEventIdentifier
     case eventNotFound(String)
+    case ambiguousExternalIdentifier(String)
+}
+
+enum EventLookupResolution: Equatable {
+    case primary
+    case externalCandidate
 }
 
 @MainActor
@@ -48,7 +66,9 @@ public final class EventKitCalendarClient: CalendarClient {
         }
     }
 
-    public func createEvent(for proposal: ReminderProposal) async throws -> String {
+    public func createEvent(
+        for proposal: ReminderProposal
+    ) async throws -> CalendarEventReference {
         try proposal.validate()
         guard let start = proposal.start else {
             throw EventKitCalendarClientError.missingStart
@@ -73,17 +93,73 @@ public final class EventKitCalendarClient: CalendarClient {
         guard let identifier = event.eventIdentifier else {
             throw EventKitCalendarClientError.missingEventIdentifier
         }
-        return identifier
+        return CalendarEventReference(
+            eventIdentifier: identifier,
+            externalIdentifier: event.calendarItemExternalIdentifier
+        )
     }
 
-    public func removeEvent(identifier: String) throws {
-        guard let event = eventStore.event(withIdentifier: identifier) else {
-            throw EventKitCalendarClientError.eventNotFound(identifier)
+    public func removeEvent(reference: CalendarEventReference) throws {
+        let primaryEvent = eventStore.event(withIdentifier: reference.eventIdentifier)
+        let externalCandidates: [EKEvent]
+        if primaryEvent == nil, let externalIdentifier = reference.externalIdentifier {
+            externalCandidates = eventStore
+                .calendarItems(withExternalIdentifier: externalIdentifier)
+                .compactMap { $0 as? EKEvent }
+        } else {
+            externalCandidates = []
+        }
+        let resolution = try Self.eventLookupResolution(
+            eventIdentifier: reference.eventIdentifier,
+            primaryExists: primaryEvent != nil,
+            externalIdentifier: reference.externalIdentifier,
+            externalCandidatesCount: externalCandidates.count
+        )
+        let event: EKEvent
+        switch resolution {
+        case .primary:
+            event = primaryEvent!
+        case .externalCandidate:
+            event = externalCandidates[0]
         }
         try eventStore.remove(
             event,
             span: Self.removalSpan(hasRecurrenceRules: event.hasRecurrenceRules)
         )
+    }
+
+    @available(*, deprecated, message: "Use removeEvent(reference:) to preserve lookup fallback.")
+    public func removeEvent(identifier: String) throws {
+        try removeEvent(
+            reference: CalendarEventReference(
+                eventIdentifier: identifier,
+                externalIdentifier: nil
+            )
+        )
+    }
+
+    nonisolated static func eventLookupResolution(
+        eventIdentifier: String = "",
+        primaryExists: Bool,
+        externalIdentifier: String?,
+        externalCandidatesCount: Int
+    ) throws -> EventLookupResolution {
+        if primaryExists {
+            return .primary
+        }
+        guard let externalIdentifier, !externalIdentifier.isEmpty else {
+            throw EventKitCalendarClientError.eventNotFound(eventIdentifier)
+        }
+        switch externalCandidatesCount {
+        case 0:
+            throw EventKitCalendarClientError.eventNotFound(eventIdentifier)
+        case 1:
+            return .externalCandidate
+        default:
+            throw EventKitCalendarClientError.ambiguousExternalIdentifier(
+                externalIdentifier
+            )
+        }
     }
 
     nonisolated static func interval(

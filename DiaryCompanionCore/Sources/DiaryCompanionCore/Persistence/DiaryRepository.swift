@@ -169,7 +169,8 @@ public final class DiaryRepository {
         notificationResult: ReminderExecutionResult,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
-        calendarEventIdentifier: String?
+        calendarEventIdentifier: String?,
+        calendarExternalIdentifier: String?
     ) throws {
         let record = try reminder(id: id)
         record.status = status.rawValue
@@ -177,6 +178,7 @@ public final class DiaryRepository {
         record.calendarResult = calendarResult.rawValue
         record.notificationIdentifiers = notificationIdentifiers.stableUniqued()
         record.calendarEventIdentifier = calendarEventIdentifier
+        record.calendarExternalIdentifier = calendarExternalIdentifier
         record.isScheduled = status == .scheduled
         try context.save()
     }
@@ -188,6 +190,7 @@ public final class DiaryRepository {
         record.calendarResult = ReminderExecutionResult.notRequested.rawValue
         record.notificationIdentifiers = []
         record.calendarEventIdentifier = nil
+        record.calendarExternalIdentifier = nil
         record.isScheduled = false
         try context.save()
     }
@@ -301,10 +304,13 @@ private extension ReminderRecord {
             && sourceMessageID == nil
             && notificationIdentifiers.isEmpty
             && calendarEventIdentifier == nil
+            && calendarExternalIdentifier == nil
     }
 
     var hasExternalResourceIdentifiers: Bool {
-        !notificationIdentifiers.isEmpty || calendarEventIdentifier != nil
+        !notificationIdentifiers.isEmpty
+            || calendarEventIdentifier != nil
+            || calendarExternalIdentifier != nil
     }
 
     var requiresExecutionResetForEditing: Bool {

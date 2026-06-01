@@ -105,6 +105,59 @@ import Testing
     )
 }
 
+@Test func eventReferenceNormalizesEmptyExternalIdentifier() {
+    let reference = CalendarEventReference(
+        eventIdentifier: "event-1",
+        externalIdentifier: ""
+    )
+
+    #expect(reference.externalIdentifier == nil)
+}
+
+@Test func eventLookupPrefersPrimaryIdentifier() throws {
+    #expect(
+        try EventKitCalendarClient.eventLookupResolution(
+            primaryExists: true,
+            externalIdentifier: "external-1",
+            externalCandidatesCount: 2
+        ) == .primary
+    )
+}
+
+@Test func eventLookupUsesUniqueExternalIdentifierFallback() throws {
+    #expect(
+        try EventKitCalendarClient.eventLookupResolution(
+            primaryExists: false,
+            externalIdentifier: "external-1",
+            externalCandidatesCount: 1
+        ) == .externalCandidate
+    )
+}
+
+@Test func eventLookupWithoutFallbackThrowsNotFound() {
+    #expect(throws: EventKitCalendarClientError.eventNotFound("event-1")) {
+        try EventKitCalendarClient.eventLookupResolution(
+            eventIdentifier: "event-1",
+            primaryExists: false,
+            externalIdentifier: nil,
+            externalCandidatesCount: 0
+        )
+    }
+}
+
+@Test func eventLookupWithMultipleFallbackMatchesThrowsAmbiguousError() {
+    #expect(
+        throws: EventKitCalendarClientError.ambiguousExternalIdentifier("external-1")
+    ) {
+        try EventKitCalendarClient.eventLookupResolution(
+            eventIdentifier: "event-1",
+            primaryExists: false,
+            externalIdentifier: "external-1",
+            externalCandidatesCount: 2
+        )
+    }
+}
+
 private let window = DateInterval(start: date(9), end: date(17))
 
 private func date(_ hour: Double) -> Date {

@@ -112,6 +112,7 @@ import SwiftData
     public var sourceMessageID: UUID?
     public var notificationIdentifiers: [String] = []
     public var calendarEventIdentifier: String?
+    public var calendarExternalIdentifier: String?
 
     public init(
         id: UUID = UUID(),
@@ -164,7 +165,8 @@ import SwiftData
         calendarResult: String = ReminderExecutionResult.notRequested.rawValue,
         sourceMessageID: UUID? = nil,
         notificationIdentifiers: [String] = [],
-        calendarEventIdentifier: String? = nil
+        calendarEventIdentifier: String? = nil,
+        calendarExternalIdentifier: String? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -188,6 +190,7 @@ import SwiftData
         self.sourceMessageID = sourceMessageID
         self.notificationIdentifiers = notificationIdentifiers
         self.calendarEventIdentifier = calendarEventIdentifier
+        self.calendarExternalIdentifier = calendarExternalIdentifier
     }
 }
 
