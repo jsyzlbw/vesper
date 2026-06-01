@@ -67,6 +67,8 @@ public struct ReminderSearchWindow: Codable, Equatable, Sendable {
 public enum ReminderProposalValidationError: Error, Equatable, Sendable {
     case emptyTitle
     case invalidDurationMinutes
+    case invalidNotificationLeadMinutes
+    case invalidAlarmLeadMinutes
     case missingStart
     case missingSearchWindow
     case invalidSearchWindow
@@ -92,6 +94,10 @@ extension ReminderProposalValidationError: LocalizedError {
             "提醒标题不能为空。"
         case .invalidDurationMinutes:
             "事件持续时间必须在 1 到 1440 分钟之间。"
+        case .invalidNotificationLeadMinutes:
+            "通知提前时间必须在 0 到 10080 分钟之间。"
+        case .invalidAlarmLeadMinutes:
+            "闹钟提前时间必须在 0 到 10080 分钟之间。"
         case .missingStart:
             "请选择提醒时间。"
         case .missingSearchWindow:
@@ -138,6 +144,10 @@ extension ReminderProposalValidationError: LocalizedError {
             "Reminder title cannot be empty."
         case .invalidDurationMinutes:
             "Duration must be between 1 and 1440 minutes."
+        case .invalidNotificationLeadMinutes:
+            "Notification lead time must be between 0 and 10080 minutes."
+        case .invalidAlarmLeadMinutes:
+            "Alarm lead time must be between 0 and 10080 minutes."
         case .missingStart:
             "Choose a reminder time."
         case .missingSearchWindow:
@@ -183,6 +193,9 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
     public var schedulingMode: ReminderSchedulingMode
     public var searchWindow: ReminderSearchWindow?
     public var notificationEnabled: Bool
+    public var notificationLeadMinutes: Int
+    public var alarmEnabled: Bool
+    public var alarmLeadMinutes: Int
     public var calendarEnabled: Bool
 
     public init(
@@ -194,6 +207,9 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         schedulingMode: ReminderSchedulingMode,
         searchWindow: ReminderSearchWindow?,
         notificationEnabled: Bool,
+        notificationLeadMinutes: Int = 0,
+        alarmEnabled: Bool = false,
+        alarmLeadMinutes: Int = 0,
         calendarEnabled: Bool
     ) {
         self.title = title
@@ -204,6 +220,9 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         self.schedulingMode = schedulingMode
         self.searchWindow = searchWindow
         self.notificationEnabled = notificationEnabled
+        self.notificationLeadMinutes = notificationLeadMinutes
+        self.alarmEnabled = alarmEnabled
+        self.alarmLeadMinutes = alarmLeadMinutes
         self.calendarEnabled = calendarEnabled
     }
 
@@ -213,6 +232,12 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         }
         guard (1...1_440).contains(durationMinutes) else {
             throw ReminderProposalValidationError.invalidDurationMinutes
+        }
+        if notificationEnabled, !(0...10_080).contains(notificationLeadMinutes) {
+            throw ReminderProposalValidationError.invalidNotificationLeadMinutes
+        }
+        if alarmEnabled, !(0...10_080).contains(alarmLeadMinutes) {
+            throw ReminderProposalValidationError.invalidAlarmLeadMinutes
         }
 
         let anchor: Date

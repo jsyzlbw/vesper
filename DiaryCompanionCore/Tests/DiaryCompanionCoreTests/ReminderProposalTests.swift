@@ -129,6 +129,33 @@ func rejectsDurationOutsideAllowedRange(durationMinutes: Int) {
     }
 }
 
+@Test func rejectsNegativeEnabledNotificationLeadTime() {
+    var proposal = makeProposal()
+    proposal.notificationLeadMinutes = -1
+
+    #expect(throws: ReminderProposalValidationError.invalidNotificationLeadMinutes) {
+        try proposal.validate()
+    }
+}
+
+@Test func rejectsEnabledAlarmLeadTimeBeyondAllowedRange() {
+    var proposal = makeProposal()
+    proposal.alarmEnabled = true
+    proposal.alarmLeadMinutes = 10_081
+
+    #expect(throws: ReminderProposalValidationError.invalidAlarmLeadMinutes) {
+        try proposal.validate()
+    }
+}
+
+@Test func permitsDormantAlarmLeadTimeWhileAlarmIsDisabled() throws {
+    var proposal = makeProposal()
+    proposal.alarmEnabled = false
+    proposal.alarmLeadMinutes = 10_081
+
+    try proposal.validate()
+}
+
 @Test func rejectsFixedReminderWithoutStart() {
     #expect(throws: ReminderProposalValidationError.missingStart) {
         try makeProposal(start: nil).validate()

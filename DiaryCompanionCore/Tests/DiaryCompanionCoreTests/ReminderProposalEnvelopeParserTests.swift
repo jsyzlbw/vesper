@@ -64,6 +64,33 @@ import Testing
     ))
 }
 
+@Test func mapsReminderOutputLeadTimesAndAlarmIntent() throws {
+    let proposal = try parseProposal(proposalJSON(
+        recurrence: #"{"kind":"once"}"#,
+        outputConfiguration: """
+        "notificationEnabled": true,
+        "notificationLeadMinutes": 15,
+        "alarmEnabled": true,
+        "alarmLeadMinutes": 30,
+        "calendarEnabled": false
+        """
+    ))
+
+    #expect(proposal.notificationLeadMinutes == 15)
+    #expect(proposal.alarmEnabled)
+    #expect(proposal.alarmLeadMinutes == 30)
+}
+
+@Test func defaultsLegacyReminderOutputConfiguration() throws {
+    let proposal = try parseProposal(proposalJSON(
+        recurrence: #"{"kind":"once"}"#
+    ))
+
+    #expect(proposal.notificationLeadMinutes == 0)
+    #expect(!proposal.alarmEnabled)
+    #expect(proposal.alarmLeadMinutes == 0)
+}
+
 @Test func mapsAllReminderRecurrenceKinds() throws {
     let cases: [(String, ReminderRecurrenceRule)] = [
         (#"{"kind":"once"}"#, .once),
@@ -244,7 +271,11 @@ private func proposalJSON(
     recurrence: String,
     schedulingMode: String = "fixed",
     start: String = #""2026-06-01T19:30:00+08:00""#,
-    searchWindow: String = "null"
+    searchWindow: String = "null",
+    outputConfiguration: String = """
+    "notificationEnabled": true,
+    "calendarEnabled": false
+    """
 ) -> String {
     """
     {
@@ -255,8 +286,7 @@ private func proposalJSON(
       "recurrence": \(recurrence),
       "schedulingMode": "\(schedulingMode)",
       "searchWindow": \(searchWindow),
-      "notificationEnabled": true,
-      "calendarEnabled": false
+      \(outputConfiguration)
     }
     """
 }

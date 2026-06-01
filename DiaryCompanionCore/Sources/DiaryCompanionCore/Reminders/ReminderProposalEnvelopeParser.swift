@@ -94,6 +94,9 @@ private struct ReminderProposalDTO: Decodable {
     var schedulingMode: String
     var searchWindow: ReminderSearchWindowDTO?
     var notificationEnabled: Bool
+    var notificationLeadMinutes: Int?
+    var alarmEnabled: Bool?
+    var alarmLeadMinutes: Int?
     var calendarEnabled: Bool
 
     func makeProposal() throws -> ReminderProposal {
@@ -110,6 +113,9 @@ private struct ReminderProposalDTO: Decodable {
             schedulingMode: schedulingMode,
             searchWindow: searchWindow?.makeSearchWindow(),
             notificationEnabled: notificationEnabled,
+            notificationLeadMinutes: notificationLeadMinutes ?? 0,
+            alarmEnabled: alarmEnabled ?? false,
+            alarmLeadMinutes: alarmLeadMinutes ?? 0,
             calendarEnabled: calendarEnabled
         )
     }
