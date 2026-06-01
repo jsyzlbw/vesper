@@ -22,6 +22,7 @@ public enum ReminderAssistantPrompt {
     - once: {"kind":"once"}
     - daily: {"kind":"daily","interval":Int,"end":End | null}
     - weekly: {"kind":"weekly","interval":Int,"weekdays":[Int],"end":End | null}
+      weekdays raw mapping: 1=Sunday/周日, 2=Monday/周一, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday, 7=Saturday
     - monthly: {"kind":"monthly","interval":Int,"day":Int,"end":End | null}
     - monthlyLastDay: {"kind":"monthlyLastDay","interval":Int,"end":End | null}
     - yearly: {"kind":"yearly","interval":Int,"month":Int,"day":Int,"end":End | null}

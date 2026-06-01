@@ -37,4 +37,11 @@ import Testing
     #expect(instruction.contains(#"{"kind":"occurrenceCount","occurrenceCount":Int}"#))
     #expect(instruction.contains("fixed 要求 start"))
     #expect(instruction.contains("findFreeTime 要求 searchWindow"))
+    #expect(instruction.contains("1=Sunday/周日"))
+    #expect(instruction.contains("2=Monday/周一"))
+    #expect(instruction.contains("3=Tuesday"))
+    #expect(instruction.contains("4=Wednesday"))
+    #expect(instruction.contains("5=Thursday"))
+    #expect(instruction.contains("6=Friday"))
+    #expect(instruction.contains("7=Saturday"))
 }
