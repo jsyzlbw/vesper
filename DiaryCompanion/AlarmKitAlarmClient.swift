@@ -1,7 +1,8 @@
-#if canImport(AlarmKit)
-@preconcurrency import AlarmKit
 import DiaryCompanionCore
 import Foundation
+
+#if canImport(AlarmKit)
+@preconcurrency import AlarmKit
 import SwiftUI
 
 @available(iOS 26.0, *)
@@ -91,3 +92,13 @@ final class AlarmKitAlarmClient: AlarmClient {
     }
 }
 #endif
+
+@MainActor
+func makeAlarmClient() -> any AlarmClient {
+#if canImport(AlarmKit)
+    if #available(iOS 26.0, *) {
+        return AlarmKitAlarmClient()
+    }
+#endif
+    return UnavailableAlarmClient()
+}

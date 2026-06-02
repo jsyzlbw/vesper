@@ -18,6 +18,23 @@ public enum AlarmClientError: Error, Equatable, Sendable {
     case alarmRequiresIOS26
     case authorizationDenied
     case rollbackFailed([String])
+
+    public func localizedDescription(language: VesperSupportedLanguage) -> String {
+        switch self {
+        case .alarmRequiresIOS26:
+            language == .simplifiedChinese
+                ? "真闹钟功能仅支持 iOS 26 及以上。你可以关闭真闹钟，改用普通通知。"
+                : "Real alarms require iOS 26 or later. Turn off the real alarm to use a normal notification instead."
+        case .authorizationDenied:
+            language == .simplifiedChinese
+                ? "没有获得闹钟权限，请在系统设置中允许 Vesper 使用闹钟。"
+                : "Alarm permission was denied. Allow Vesper to use alarms in Settings."
+        case .rollbackFailed:
+            language == .simplifiedChinese
+                ? "闹钟清理未完成。Vesper 已保存恢复信息，请稍后点击恢复后重试。"
+                : "Alarm cleanup is incomplete. Vesper saved recovery details; recover and retry later."
+        }
+    }
 }
 
 public struct AlarmOccurrence: Equatable, Sendable {

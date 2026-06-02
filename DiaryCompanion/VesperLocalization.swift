@@ -93,7 +93,11 @@ struct VesperStrings {
     var reminderCancelled: String { text("提醒已取消", "Reminder cancelled") }
     var invalidReminderStatus: String { text("提醒状态异常", "Invalid reminder status") }
     var schedulingMode: String { text("安排方式", "Schedule") }
-    var reminderTime: String { text("提醒时间", "Reminder time") }
+    var reminderTime: String { text("事件时间", "Event time") }
+    var eventTime: String { text("事件时间", "Event time") }
+    var notificationTime: String { text("通知时间", "Notification time") }
+    var realAlarm: String { text("真闹钟", "Real alarm") }
+    var alarmTime: String { text("闹钟时间", "Alarm time") }
     var recurrence: String { text("重复规则", "Repeat") }
     var eventDuration: String { text("事件持续时间", "Duration") }
     var systemNotification: String { text("系统通知", "Notification") }
@@ -126,7 +130,15 @@ struct VesperStrings {
     var limitOccurrences: String { text("限制重复次数", "Limit occurrences") }
     var createOutputs: String { text("创建内容", "Create") }
     var soundAndVibration: String { text("系统通知（声音与震动）", "Notification (sound and vibration)") }
+    var realAlarmIOS26Footer: String { text("真闹钟会像系统闹钟一样响铃。仅支持 iOS 26 及以上；普通提醒默认不会开启。", "Real alarms ring like system alarms. They require iOS 26 or later and stay off for ordinary reminders.") }
     func durationStepper(_ minutes: Int) -> String { text("事件持续时间：\(minutes) 分钟", "Duration: \(minutes) min") }
+    func minutesBeforeEvent(_ minutes: Int) -> String { text("通知提前：\(minutes) 分钟", "Notify \(minutes) min before") }
+    func alarmMinutesBeforeEvent(_ minutes: Int) -> String { text("闹钟提前：\(minutes) 分钟", "Alarm \(minutes) min before") }
+    func outputTime(_ time: String, minutesBefore: Int) -> String {
+        minutesBefore == 0
+            ? time
+            : text("\(time)（提前 \(minutesBefore) 分钟）", "\(time) (\(minutesBefore) min before)")
+    }
     func interval(_ value: Int) -> String { text("间隔：\(value)", "Interval: \(value)") }
     func totalOccurrences(_ value: Int) -> String { text("总次数：\(value)", "Occurrences: \(value)") }
     func recurrenceOccurrences(_ value: Int) -> String { text("持续 \(value) 次", "\(value) occurrences") }

@@ -155,6 +155,26 @@ struct ReminderProposalEditorView: View {
     private var outputSection: some View {
         Section(localization.strings.createOutputs) {
             Toggle(localization.strings.soundAndVibration, isOn: $draft.notificationEnabled)
+            if draft.notificationEnabled {
+                Stepper(
+                    localization.strings.minutesBeforeEvent(draft.notificationLeadMinutes),
+                    value: $draft.notificationLeadMinutes,
+                    in: 0...10_080,
+                    step: 5
+                )
+            }
+            Toggle(localization.strings.realAlarm, isOn: $draft.alarmEnabled)
+            if draft.alarmEnabled {
+                Stepper(
+                    localization.strings.alarmMinutesBeforeEvent(draft.alarmLeadMinutes),
+                    value: $draft.alarmLeadMinutes,
+                    in: 0...10_080,
+                    step: 5
+                )
+                Text(localization.strings.realAlarmIOS26Footer)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Toggle(localization.strings.addToCalendar, isOn: $draft.calendarEnabled)
         }
     }
@@ -244,6 +264,9 @@ private struct ReminderEditorDraft {
     var occurrenceCount: Int
     var preservedEndDate: Date?
     var notificationEnabled: Bool
+    var notificationLeadMinutes: Int
+    var alarmEnabled: Bool
+    var alarmLeadMinutes: Int
     var calendarEnabled: Bool
 
     init(proposal: ReminderProposal, calendar: Calendar = .current) {
@@ -257,6 +280,9 @@ private struct ReminderEditorDraft {
         searchWindowEnd = proposal.searchWindow?.end
             ?? calendar.date(byAdding: .hour, value: 1, to: fallbackStart)!
         notificationEnabled = proposal.notificationEnabled
+        notificationLeadMinutes = proposal.notificationLeadMinutes
+        alarmEnabled = proposal.alarmEnabled
+        alarmLeadMinutes = proposal.alarmLeadMinutes
         calendarEnabled = proposal.calendarEnabled
 
         switch proposal.recurrence {
@@ -325,6 +351,9 @@ private struct ReminderEditorDraft {
                 ? ReminderSearchWindow(start: searchWindowStart, end: searchWindowEnd)
                 : nil,
             notificationEnabled: notificationEnabled,
+            notificationLeadMinutes: notificationLeadMinutes,
+            alarmEnabled: alarmEnabled,
+            alarmLeadMinutes: alarmLeadMinutes,
             calendarEnabled: calendarEnabled
         )
         try proposal.validate()

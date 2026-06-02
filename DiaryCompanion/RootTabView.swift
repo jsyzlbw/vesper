@@ -44,23 +44,27 @@ struct RootTabView: View {
             }
         }
         .task {
-            await replenishNotifications()
+            await replenishReminderOutputs()
         }
         .onChange(of: scenePhase) {
             guard scenePhase == .active else {
                 return
             }
             Task {
-                await replenishNotifications()
+                await replenishReminderOutputs()
             }
         }
     }
 
     @MainActor
-    private func replenishNotifications() async {
+    private func replenishReminderOutputs() async {
         try? await ReminderNotificationReplenisher(
             repository: DiaryRepository(context: modelContext),
             notificationClient: UserNotificationCenterClient()
+        ).replenish()
+        try? await ReminderAlarmReplenisher(
+            repository: DiaryRepository(context: modelContext),
+            alarmClient: makeAlarmClient()
         ).replenish()
     }
 }

@@ -275,6 +275,7 @@ struct ChatView: View {
                 let coordinator = ReminderSchedulingCoordinator(
                     repository: DiaryRepository(context: modelContext),
                     notificationClient: UserNotificationCenterClient(),
+                    alarmClient: makeAlarmClient(),
                     calendarClient: EventKitCalendarClient()
                 )
                 switch action {
@@ -289,6 +290,10 @@ struct ChatView: View {
                     try await ReminderNotificationReplenisher(
                         repository: DiaryRepository(context: modelContext),
                         notificationClient: UserNotificationCenterClient()
+                    ).replenish()
+                    try await ReminderAlarmReplenisher(
+                        repository: DiaryRepository(context: modelContext),
+                        alarmClient: makeAlarmClient()
                     ).replenish()
                 case .cancel:
                     try coordinator.cancel(reminderID: reminder.id)
@@ -313,6 +318,7 @@ struct ChatView: View {
         try ReminderSchedulingCoordinator(
             repository: DiaryRepository(context: modelContext),
             notificationClient: UserNotificationCenterClient(),
+            alarmClient: makeAlarmClient(),
             calendarClient: calendarClient
         ).edit(reminderID: reminderID, proposal: resolvedProposal)
     }
@@ -325,6 +331,9 @@ struct ChatView: View {
             return error.localizedDescription(language: localization.language)
         }
         if let error = error as? ProviderStreamError {
+            return error.localizedDescription(language: localization.language)
+        }
+        if let error = error as? AlarmClientError {
             return error.localizedDescription(language: localization.language)
         }
         guard let error = error as? ChatViewError else {

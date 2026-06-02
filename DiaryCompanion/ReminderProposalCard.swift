@@ -19,9 +19,9 @@ struct ReminderProposalCard: View {
                 )
                 Divider()
                 detailRow(
-                    title: localization.strings.reminderTime,
+                    title: localization.strings.eventTime,
                     value: scheduleText,
-                    systemImage: "bell"
+                    systemImage: "calendar"
                 )
                 Divider()
                 detailRow(
@@ -41,6 +41,28 @@ struct ReminderProposalCard: View {
                     value: reminder.notificationEnabled ? localization.strings.on : localization.strings.off,
                     systemImage: "bell.badge"
                 )
+                if reminder.notificationEnabled {
+                    Divider()
+                    detailRow(
+                        title: localization.strings.notificationTime,
+                        value: outputTimeText(leadMinutes: reminder.notificationLeadMinutes),
+                        systemImage: "bell"
+                    )
+                }
+                Divider()
+                detailRow(
+                    title: localization.strings.realAlarm,
+                    value: reminder.alarmEnabled ? localization.strings.on : localization.strings.off,
+                    systemImage: "alarm"
+                )
+                if reminder.alarmEnabled {
+                    Divider()
+                    detailRow(
+                        title: localization.strings.alarmTime,
+                        value: outputTimeText(leadMinutes: reminder.alarmLeadMinutes),
+                        systemImage: "alarm.waves.left.and.right"
+                    )
+                }
                 Divider()
                 detailRow(
                     title: localization.strings.addToCalendar,
@@ -261,6 +283,24 @@ struct ReminderProposalCard: View {
         reminder.schedulingMode == ReminderSchedulingMode.findFreeTime.rawValue
             ? localization.strings.automaticScheduling
             : localization.strings.fixedTime
+    }
+
+    private func outputTimeText(leadMinutes: Int) -> String {
+        guard let firstOccurrence = reminder.firstOccurrence else {
+            return localization.strings.waitingForTime
+        }
+        let outputTime = Calendar.current.date(
+            byAdding: .minute,
+            value: -leadMinutes,
+            to: firstOccurrence
+        ) ?? firstOccurrence
+        return localization.strings.outputTime(
+            outputTime.formatted(
+                Date.FormatStyle(date: .abbreviated, time: .shortened)
+                    .locale(localization.locale)
+            ),
+            minutesBefore: leadMinutes
+        )
     }
 
     private var recurrenceText: String {

@@ -31,6 +31,8 @@ import Testing
     #expect(instruction.contains("用户确认前"))
     #expect(instruction.contains("不得声称已创建通知或日历"))
     #expect(instruction.contains("等待卡片确认"))
+    #expect(instruction.contains("不得只用自然语言询问用户是否确认"))
+    #expect(instruction.contains("必须在同一条回复中输出 envelope"))
     #expect(instruction.contains("只有用户明确要求闹钟或 alarm 时，alarmEnabled 才能为 true"))
     #expect(instruction.contains(#"{"kind":"once"}"#))
     #expect(instruction.contains(#"{"kind":"daily","interval":Int,"end":End | null}"#))

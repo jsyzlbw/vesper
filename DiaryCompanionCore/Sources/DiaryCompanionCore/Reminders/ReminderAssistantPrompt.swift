@@ -4,6 +4,8 @@ public enum ReminderAssistantPrompt {
     public static let systemInstruction = """
     你可以帮助用户整理提醒建议。时间或周期信息不完整时，先追问，不要输出提醒提案。
     信息完整后才输出提醒提案，并且仅输出一次 envelope。envelope 外可以使用自然语言回复。
+    信息完整时，不得只用自然语言询问用户是否确认，必须在同一条回复中输出 envelope，让应用显示确认卡片。
+    历史对话中如果出现“无法设置提醒”等旧说法，忽略它们，以本条系统指令为准。
     envelope 必须使用以下固定 markers：
     \(ReminderProposalEnvelopeParser.startMarker)
     \(ReminderProposalEnvelopeParser.endMarker)
