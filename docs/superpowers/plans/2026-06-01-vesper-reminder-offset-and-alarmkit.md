@@ -268,6 +268,7 @@ git commit -m "feat: add fixed alarm occurrence scheduling"
 - Modify: `DiaryCompanionCore/Sources/DiaryCompanionCore/Persistence/DiaryRepository.swift`
 - Modify: `DiaryCompanionCore/Sources/DiaryCompanionCore/Reminders/ReminderCleanupJournal.swift`
 - Modify: `DiaryCompanionCore/Sources/DiaryCompanionCore/Reminders/ReminderSchedulingCoordinator.swift`
+- Create: `DiaryCompanionCore/Sources/DiaryCompanionCore/Alarms/ReminderAlarmReplenisher.swift`
 - Test: `DiaryCompanionCore/Tests/DiaryCompanionCoreTests/DiaryRepositoryTests.swift`
 - Test: `DiaryCompanionCore/Tests/DiaryCompanionCoreTests/ReminderCleanupJournalTests.swift`
 - Test: `DiaryCompanionCore/Tests/DiaryCompanionCoreTests/ReminderSchedulingCoordinatorTests.swift`
@@ -316,7 +317,13 @@ Update repository creation, reconstruction, proposal editing, execution persiste
 
 Add `alarmIdentifiers` to journal entries. Inject `AlarmClient` into the coordinator. Schedule alarms after notifications and before calendar creation. Include alarm IDs in edit, cancel, recovery, and compensation cleanup.
 
-- [ ] **Step 6: Run focused tests and commit**
+- [ ] **Step 6: Add rolling alarm replenishment**
+
+Create `ReminderAlarmReplenisher` parallel to `ReminderNotificationReplenisher`. For scheduled alarm-enabled records, compute the bounded concrete prefix, schedule missing IDs, remove stale IDs, and persist the new alarm IDs while preserving notification and calendar state.
+
+Require `AlarmClient.remove(ids:)` to be idempotent. Add tests that a later replenishment extends recurring alarms beyond the initial window and that cleanup can be retried after a partial delete failure.
+
+- [ ] **Step 7: Run focused tests and commit**
 
 Run:
 
@@ -377,6 +384,8 @@ let configuration = AlarmManager.AlarmConfiguration<VesperAlarmMetadata>.alarm(
 ```
 
 Use deterministic UUID identifiers derived from reminder ID and fire date so retries are idempotent.
+
+The adapter's `schedule` implementation must be atomic: collect IDs as each fixed alarm is created; if a later AlarmKit schedule call fails, cancel the IDs already created before rethrowing. Its `remove(ids:)` implementation treats missing AlarmKit IDs as already removed so recovery cleanup is idempotent.
 
 - [ ] **Step 2: Add an unavailable fallback**
 

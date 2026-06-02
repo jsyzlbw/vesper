@@ -90,6 +90,10 @@ On older systems, the production client throws a readable `alarmRequiresIOS26` e
 
 Add a localized `NSAlarmKitUsageDescription` privacy string. AlarmKit refuses to schedule alarms when this key is absent or empty.
 
+`AlarmClient.schedule` is atomic: if creating any fixed alarm fails, the client removes alarms it already created before rethrowing the error. `AlarmClient.remove` is idempotent so recovery may safely retry cleanup after interruption.
+
+Add a rolling alarm replenisher parallel to notification replenishment. It rebuilds the bounded concrete alarm prefix, schedules missing alarms, removes stale alarms, and persists the new identifiers. Recurring alarms must not stop after the initial window expires.
+
 ## Persistence
 
 Persist:
