@@ -48,8 +48,16 @@ final class AlarmKitAlarmClient: AlarmClient {
                 createdIDs.append(occurrence.identifier)
             }
         } catch {
+            var failedRollbackIDs: [String] = []
             for id in createdIDs {
-                try? manager.cancel(id: id)
+                do {
+                    try manager.cancel(id: id)
+                } catch {
+                    failedRollbackIDs.append(id.uuidString)
+                }
+            }
+            if !failedRollbackIDs.isEmpty {
+                throw AlarmClientError.rollbackFailed(failedRollbackIDs)
             }
             throw error
         }

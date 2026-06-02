@@ -17,6 +17,7 @@ public protocol AlarmClient: AnyObject {
 public enum AlarmClientError: Error, Equatable, Sendable {
     case alarmRequiresIOS26
     case authorizationDenied
+    case rollbackFailed([String])
 }
 
 public struct AlarmOccurrence: Equatable, Sendable {

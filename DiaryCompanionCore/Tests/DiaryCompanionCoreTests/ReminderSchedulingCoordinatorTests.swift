@@ -75,6 +75,37 @@ import UserNotifications
 }
 
 @MainActor
+@Test func alarmRollbackFailurePreservesRecoveryHandles() async throws {
+    let fixture = try CoordinatorFixture(
+        proposal: makeProposal(
+            notificationEnabled: false,
+            alarmEnabled: true,
+            calendarEnabled: false
+        )
+    )
+    let rollbackIDs = [
+        "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+        "11111111-2222-3333-4444-555555555555",
+    ]
+    fixture.alarms.scheduleError = AlarmClientError.rollbackFailed(
+        rollbackIDs
+    )
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: ReminderSchedulingCoordinatorError.cleanupFailed) {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.alarmIdentifiers == rollbackIDs)
+    #expect(fixture.cleanupJournal.entries[record.id] == ReminderCleanupJournalEntry(
+        calendarReference: nil,
+        notificationIdentifiers: [],
+        alarmIdentifiers: rollbackIDs
+    ))
+}
+
+@MainActor
 @Test func unavailableAlarmClientRequirementIsSurfacedWithoutNotificationFallback() async throws {
     let fixture = try CoordinatorFixture(
         proposal: makeProposal(

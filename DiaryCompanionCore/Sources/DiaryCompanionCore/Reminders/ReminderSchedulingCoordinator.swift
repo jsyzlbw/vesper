@@ -242,6 +242,26 @@ public final class ReminderSchedulingCoordinator {
                     alarmResult = .permissionDenied
                 }
             } catch {
+                if case let AlarmClientError.rollbackFailed(ids) = error {
+                    alarmIdentifiers = stableUniqued(alarmIdentifiers + ids)
+                    try? saveCleanupJournal(
+                        reminderID: reminderID,
+                        notificationIdentifiers: notificationIdentifiers,
+                        alarmIdentifiers: alarmIdentifiers,
+                        calendarReference: calendarReference
+                    )
+                    try? persist(
+                        reminderID: reminderID,
+                        status: .executing,
+                        notificationResult: notificationResult,
+                        alarmResult: alarmResult,
+                        calendarResult: calendarResult,
+                        notificationIdentifiers: notificationIdentifiers,
+                        alarmIdentifiers: alarmIdentifiers,
+                        calendarReference: calendarReference
+                    )
+                    throw ReminderSchedulingCoordinatorError.cleanupFailed
+                }
                 if error is CancellationError || error as? AlarmClientError == .alarmRequiresIOS26 {
                     try compensate(
                         reminderID: reminderID,
