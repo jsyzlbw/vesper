@@ -426,6 +426,32 @@ import UserNotifications
 }
 
 @MainActor
+@Test func alarmJournalFailureAndRemovalFailureSurfacesCleanupFailedWithRecoveryHandles() async throws {
+    let fixture = try CoordinatorFixture(
+        proposal: makeProposal(
+            notificationEnabled: false,
+            alarmEnabled: true,
+            calendarEnabled: false
+        )
+    )
+    fixture.cleanupJournal.failSaveCalls = [1]
+    fixture.alarms.failRemoveCalls = [1]
+    let record = try fixture.makeRecord()
+
+    await #expect(throws: ReminderSchedulingCoordinatorError.cleanupFailed) {
+        try await fixture.coordinator.confirm(reminderID: record.id)
+    }
+
+    #expect(record.status == ReminderProposalStatus.executing.rawValue)
+    #expect(record.alarmIdentifiers == fixture.expectedAlarmIDs)
+    #expect(fixture.cleanupJournal.entries[record.id] == ReminderCleanupJournalEntry(
+        calendarReference: nil,
+        notificationIdentifiers: [],
+        alarmIdentifiers: fixture.expectedAlarmIDs
+    ))
+}
+
+@MainActor
 @Test func calendarPersistenceFailureRollsBackAllCreatedOutputsAndResetsExecution() async throws {
     let fixture = try CoordinatorFixture()
     let persistence = FailingReminderPersistence(
@@ -562,6 +588,36 @@ import UserNotifications
         ),
         notificationIdentifiers: fixture.expectedNotificationIDs
     ))
+}
+
+@MainActor
+@Test func recoverInterruptedExecutionRetriesIdempotentAlarmRemoval() throws {
+    let fixture = try CoordinatorFixture()
+    let record = try fixture.makeRecord()
+    try fixture.repository.updateReminderExecution(
+        id: record.id,
+        status: .executing,
+        notificationResult: .notRequested,
+        alarmResult: .pending,
+        calendarResult: .notRequested,
+        notificationIdentifiers: [],
+        alarmIdentifiers: ["alarm-retry"],
+        calendarEventIdentifier: nil,
+        calendarExternalIdentifier: nil
+    )
+    fixture.alarms.failRemoveCalls = [1]
+
+    #expect(throws: FixtureError.failed) {
+        try fixture.coordinator.recoverInterruptedExecution(reminderID: record.id)
+    }
+    try fixture.coordinator.recoverInterruptedExecution(reminderID: record.id)
+
+    #expect(fixture.alarms.removedIdentifierBatches == [
+        ["alarm-retry"],
+        ["alarm-retry"],
+    ])
+    #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(record.alarmIdentifiers.isEmpty)
 }
 
 @MainActor
@@ -735,8 +791,15 @@ private final class AlarmClientSpy: AlarmClient {
     var authorizationRequestCount = 0
     var scheduledReminderIDs: [UUID] = []
     var removedIdentifierBatches: [[String]] = []
-    var scheduledIdentifiers = ["alarm-1", "alarm-2"]
+    var failRemoveCalls: Set<Int> = []
     var onSchedule: () -> Void = {}
+
+    var scheduledIdentifiers: [String] {
+        scheduledOccurrences.flatMap { $0 }.map(\.identifier.uuidString)
+    }
+
+    private(set) var scheduledOccurrences: [[AlarmOccurrence]] = []
+    private var removeCallCount = 0
 
     func requestAuthorization() async throws -> Bool {
         authorizationRequestCount += 1
@@ -746,18 +809,22 @@ private final class AlarmClientSpy: AlarmClient {
     func schedule(
         reminderID: UUID,
         proposal: ReminderProposal,
-        windowStart: Date
-    ) async throws -> [String] {
+        occurrences: [AlarmOccurrence]
+    ) async throws {
         onSchedule()
         scheduledReminderIDs.append(reminderID)
         if let scheduleError {
             throw scheduleError
         }
-        return scheduledIdentifiers
+        scheduledOccurrences.append(occurrences)
     }
 
     func remove(ids: [String]) throws {
+        removeCallCount += 1
         removedIdentifierBatches.append(ids)
+        guard !failRemoveCalls.contains(removeCallCount) else {
+            throw FixtureError.failed
+        }
     }
 }
 

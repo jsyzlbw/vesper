@@ -36,6 +36,7 @@ public final class ReminderSchedulingCoordinator {
     private let calendarClient: CalendarClient
     private let cleanupJournal: any ReminderCleanupJournaling
     private let makeRequests: RequestFactory
+    private let alarmOccurrenceFactory: AlarmOccurrenceFactory
     private let now: () -> Date
 
     public init(
@@ -45,6 +46,7 @@ public final class ReminderSchedulingCoordinator {
         calendarClient: CalendarClient,
         cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: ReminderRequestFactory = ReminderRequestFactory(),
+        alarmOccurrenceFactory: AlarmOccurrenceFactory = AlarmOccurrenceFactory(),
         now: @escaping () -> Date = Date.init
     ) {
         self.repository = repository
@@ -52,6 +54,7 @@ public final class ReminderSchedulingCoordinator {
         self.alarmClient = alarmClient
         self.calendarClient = calendarClient
         self.cleanupJournal = cleanupJournal
+        self.alarmOccurrenceFactory = alarmOccurrenceFactory
         makeRequests = { reminderID, proposal, windowStart in
             try requestFactory.makeRequests(
                 reminderID: reminderID,
@@ -69,6 +72,7 @@ public final class ReminderSchedulingCoordinator {
         calendarClient: CalendarClient,
         cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: @escaping RequestFactory,
+        alarmOccurrenceFactory: AlarmOccurrenceFactory = AlarmOccurrenceFactory(),
         now: @escaping () -> Date = Date.init
     ) {
         self.repository = repository
@@ -77,6 +81,7 @@ public final class ReminderSchedulingCoordinator {
         self.calendarClient = calendarClient
         self.cleanupJournal = cleanupJournal
         makeRequests = requestFactory
+        self.alarmOccurrenceFactory = alarmOccurrenceFactory
         self.now = now
     }
 
@@ -188,11 +193,17 @@ public final class ReminderSchedulingCoordinator {
                 let isAuthorized = try await alarmClient.requestAuthorization()
                 try Task.checkCancellation()
                 if isAuthorized {
-                    alarmIdentifiers = try await alarmClient.schedule(
+                    let occurrences = try alarmOccurrenceFactory.occurrences(
                         reminderID: reminderID,
                         proposal: proposal,
                         windowStart: now()
                     )
+                    try await alarmClient.schedule(
+                        reminderID: reminderID,
+                        proposal: proposal,
+                        occurrences: occurrences
+                    )
+                    alarmIdentifiers = occurrences.map { $0.identifier.uuidString }
                     do {
                         try saveCleanupJournal(
                             reminderID: reminderID,
@@ -201,7 +212,27 @@ public final class ReminderSchedulingCoordinator {
                             calendarReference: calendarReference
                         )
                     } catch {
-                        try alarmClient.remove(ids: alarmIdentifiers)
+                        do {
+                            try alarmClient.remove(ids: alarmIdentifiers)
+                        } catch {
+                            try? saveCleanupJournal(
+                                reminderID: reminderID,
+                                notificationIdentifiers: notificationIdentifiers,
+                                alarmIdentifiers: alarmIdentifiers,
+                                calendarReference: calendarReference
+                            )
+                            try? persist(
+                                reminderID: reminderID,
+                                status: .executing,
+                                notificationResult: notificationResult,
+                                alarmResult: alarmResult,
+                                calendarResult: calendarResult,
+                                notificationIdentifiers: notificationIdentifiers,
+                                alarmIdentifiers: alarmIdentifiers,
+                                calendarReference: calendarReference
+                            )
+                            throw ReminderSchedulingCoordinatorError.cleanupFailed
+                        }
                         alarmIdentifiers = []
                         throw error
                     }
@@ -221,6 +252,9 @@ public final class ReminderSchedulingCoordinator {
                         alarmIdentifiers: alarmIdentifiers,
                         calendarReference: calendarReference
                     )
+                    throw error
+                }
+                if error as? ReminderSchedulingCoordinatorError == .cleanupFailed {
                     throw error
                 }
                 alarmResult = .failed

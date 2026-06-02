@@ -65,6 +65,53 @@ import Testing
     ])
 }
 
+@Test func alarmOccurrencesUseStableDistinctIdentifiers() throws {
+    let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC")!
+    let factory = AlarmOccurrenceFactory(calendar: utcCalendar)
+    let proposal = makeProposal(
+        start: date(2026, 6, 7, 15),
+        recurrence: .daily(interval: 1, end: nil),
+        alarmEnabled: true
+    )
+
+    let first = try factory.occurrences(
+        reminderID: reminderID,
+        proposal: proposal,
+        windowStart: date(2026, 6, 1),
+        windowDays: 10
+    )
+    let second = try factory.occurrences(
+        reminderID: reminderID,
+        proposal: proposal,
+        windowStart: date(2026, 6, 1),
+        windowDays: 10
+    )
+
+    #expect(first == second)
+    #expect(Set(first.map(\.identifier)).count == first.count)
+}
+
+@MainActor
+@Test func alarmClientContractRollsBackPartialScheduleAndTreatsMissingRemovalAsSuccess() async throws {
+    let client = ContractAlarmClientSpy(failAfterCreatedCount: 1)
+    let occurrences = [
+        AlarmOccurrence(identifier: UUID(), fireDate: date(2026, 6, 1, 9)),
+        AlarmOccurrence(identifier: UUID(), fireDate: date(2026, 6, 2, 9)),
+    ]
+
+    await #expect(throws: ContractAlarmClientSpy.Failure.scheduleFailed) {
+        try await client.schedule(
+            reminderID: UUID(),
+            proposal: makeProposal(alarmEnabled: true),
+            occurrences: occurrences
+        )
+    }
+    try client.remove(ids: occurrences.map { $0.identifier.uuidString })
+    try client.remove(ids: occurrences.map { $0.identifier.uuidString })
+
+    #expect(client.activeIdentifiers.isEmpty)
+}
+
 @MainActor
 @Test func unavailableAlarmClientRejectsScheduling() async throws {
     let client: any AlarmClient = UnavailableAlarmClient()
@@ -76,7 +123,7 @@ import Testing
         try await client.schedule(
             reminderID: UUID(),
             proposal: makeProposal(alarmEnabled: true),
-            windowStart: date(2026, 6, 1)
+            occurrences: []
         )
     }
     try client.remove(ids: ["alarm-id"])
@@ -86,13 +133,11 @@ import Testing
 @Test func unavailableAlarmClientIgnoresDisabledAlarm() async throws {
     let client = UnavailableAlarmClient()
 
-    let ids = try await client.schedule(
+    try await client.schedule(
         reminderID: UUID(),
         proposal: makeProposal(alarmEnabled: false),
-        windowStart: date(2026, 6, 1)
+        occurrences: []
     )
-
-    #expect(ids == [])
 }
 
 private var utcCalendar: Calendar {
@@ -139,4 +184,43 @@ private func date(
             minute: minute
         )
     )!
+}
+
+@MainActor
+private final class ContractAlarmClientSpy: AlarmClient {
+    enum Failure: Error {
+        case scheduleFailed
+    }
+
+    private let failAfterCreatedCount: Int
+    private(set) var activeIdentifiers: Set<String> = []
+
+    init(failAfterCreatedCount: Int) {
+        self.failAfterCreatedCount = failAfterCreatedCount
+    }
+
+    func requestAuthorization() async throws -> Bool {
+        true
+    }
+
+    func schedule(
+        reminderID: UUID,
+        proposal: ReminderProposal,
+        occurrences: [AlarmOccurrence]
+    ) async throws {
+        var createdIdentifiers: [String] = []
+        for occurrence in occurrences {
+            let identifier = occurrence.identifier.uuidString
+            activeIdentifiers.insert(identifier)
+            createdIdentifiers.append(identifier)
+            if createdIdentifiers.count == failAfterCreatedCount {
+                try remove(ids: createdIdentifiers)
+                throw Failure.scheduleFailed
+            }
+        }
+    }
+
+    func remove(ids: [String]) throws {
+        ids.forEach { activeIdentifiers.remove($0) }
+    }
 }
