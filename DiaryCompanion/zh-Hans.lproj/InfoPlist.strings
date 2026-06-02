@@ -1,2 +1,3 @@
 "NSCalendarsFullAccessUsageDescription" = "读取已有日程并在你确认后创建提醒事件。";
 "NSCalendarsWriteOnlyAccessUsageDescription" = "在你确认后将提醒写入系统日历。";
+"NSAlarmKitUsageDescription" = "仅在你确认后安排闹钟。";
