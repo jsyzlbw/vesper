@@ -91,6 +91,36 @@ import Testing
     #expect(proposal.alarmLeadMinutes == 0)
 }
 
+@Test func defaultsMissingAlarmOnlyDurationToOneMinute() throws {
+    let proposal = try parseProposal(proposalJSON(
+        recurrence: #"{"kind":"once"}"#,
+        duration: nil,
+        outputConfiguration: """
+        "notificationEnabled": false,
+        "alarmEnabled": true,
+        "alarmLeadMinutes": 0,
+        "calendarEnabled": false
+        """
+    ))
+
+    #expect(proposal.durationMinutes == 1)
+}
+
+@Test func normalizesZeroAlarmOnlyDurationToOneMinute() throws {
+    let proposal = try parseProposal(proposalJSON(
+        recurrence: #"{"kind":"once"}"#,
+        duration: 0,
+        outputConfiguration: """
+        "notificationEnabled": false,
+        "alarmEnabled": true,
+        "alarmLeadMinutes": 0,
+        "calendarEnabled": false
+        """
+    ))
+
+    #expect(proposal.durationMinutes == 1)
+}
+
 @Test func mapsAllReminderRecurrenceKinds() throws {
     let cases: [(String, ReminderRecurrenceRule)] = [
         (#"{"kind":"once"}"#, .once),
@@ -272,6 +302,7 @@ private func proposalJSON(
     schedulingMode: String = "fixed",
     start: String = #""2026-06-01T19:30:00+08:00""#,
     searchWindow: String = "null",
+    duration: Int? = 30,
     outputConfiguration: String = """
     "notificationEnabled": true,
     "calendarEnabled": false
@@ -282,7 +313,7 @@ private func proposalJSON(
       "title": "Review plan",
       "notes": "Prepare notes.",
       "start": \(start),
-      "durationMinutes": 30,
+      \(duration.map { #""durationMinutes": \#($0),"# } ?? "")
       "recurrence": \(recurrence),
       "schedulingMode": "\(schedulingMode)",
       "searchWindow": \(searchWindow),

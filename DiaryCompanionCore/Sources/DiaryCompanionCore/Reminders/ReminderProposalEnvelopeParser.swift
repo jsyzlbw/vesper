@@ -89,7 +89,7 @@ private struct ReminderProposalDTO: Decodable {
     var title: String
     var notes: String
     var start: Date?
-    var durationMinutes: Int
+    var durationMinutes: Int?
     var recurrence: ReminderRecurrenceRuleDTO
     var schedulingMode: String
     var searchWindow: ReminderSearchWindowDTO?
@@ -108,7 +108,7 @@ private struct ReminderProposalDTO: Decodable {
             title: title,
             notes: notes,
             start: start,
-            durationMinutes: durationMinutes,
+            durationMinutes: normalizedDurationMinutes,
             recurrence: try recurrence.makeRecurrenceRule(),
             schedulingMode: schedulingMode,
             searchWindow: searchWindow?.makeSearchWindow(),
@@ -118,6 +118,13 @@ private struct ReminderProposalDTO: Decodable {
             alarmLeadMinutes: alarmLeadMinutes ?? 0,
             calendarEnabled: calendarEnabled
         )
+    }
+
+    private var normalizedDurationMinutes: Int {
+        guard let durationMinutes, durationMinutes != 0 else {
+            return 1
+        }
+        return durationMinutes
     }
 }
 

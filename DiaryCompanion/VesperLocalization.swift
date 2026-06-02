@@ -130,7 +130,7 @@ struct VesperStrings {
     var limitOccurrences: String { text("限制重复次数", "Limit occurrences") }
     var createOutputs: String { text("创建内容", "Create") }
     var soundAndVibration: String { text("系统通知（声音与震动）", "Notification (sound and vibration)") }
-    var realAlarmIOS26Footer: String { text("真闹钟会像系统闹钟一样响铃。仅支持 iOS 26 及以上；普通提醒默认不会开启。", "Real alarms ring like system alarms. They require iOS 26 or later and stay off for ordinary reminders.") }
+    var realAlarmIOS26Footer: String { text("真闹钟会像系统闹钟一样响铃。仅支持 iOS 26 及以上，由 Vesper 管理，可能不会显示在“时钟”App 列表中；普通提醒默认不会开启。", "Real alarms ring like system alarms. They require iOS 26 or later, are managed by Vesper, and may not appear in the Clock app list. Ordinary reminders keep them off.") }
     func durationStepper(_ minutes: Int) -> String { text("事件持续时间：\(minutes) 分钟", "Duration: \(minutes) min") }
     func minutesBeforeEvent(_ minutes: Int) -> String { text("通知提前：\(minutes) 分钟", "Notify \(minutes) min before") }
     func alarmMinutesBeforeEvent(_ minutes: Int) -> String { text("闹钟提前：\(minutes) 分钟", "Alarm \(minutes) min before") }

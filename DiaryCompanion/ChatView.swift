@@ -157,71 +157,161 @@ struct ChatView: View {
             let requestMessages = try chatMessages(
                 from: conversationRepository.fetchMessages(conversationID: conversation.id)
             )
-            let stream = try await ProviderStreamingClient().events(
+            let assistantMessageID = try conversationRepository.createMessage(
+                conversationID: conversation.id,
+                role: .assistant,
+                content: ""
+            ).id
+            let initialReply = try await streamedReply(
                 profile: profile,
                 apiKey: apiKey,
-                messages: requestMessages
+                messages: requestMessages,
+                assistantMessageID: assistantMessageID,
+                repository: conversationRepository
             )
-            var assistantMessageID: UUID?
-            var reminderBuffer = ReminderProposalStreamBuffer()
-
-            statusText = localization.strings.generatingReply
-            streamLoop:
-            for try await event in stream {
-                switch event {
-                case let .textDelta(delta):
-                    if assistantMessageID == nil {
-                        assistantMessageID = try conversationRepository.createMessage(
-                            conversationID: conversation.id,
-                            role: .assistant,
-                            content: ""
-                        ).id
-                    }
-                    reminderBuffer.append(delta)
-                    try conversationRepository.replaceContent(
-                        reminderBuffer.visibleText,
-                        of: assistantMessageID!
-                    )
-                case .reasoningDelta:
-                    statusText = localization.strings.thinking
-                case .done:
-                    break streamLoop
-                }
-            }
-            reminderBuffer.finish()
-            if let assistantMessageID {
-                let parseResult = try ReminderProposalEnvelopeParser().parse(
-                    reminderBuffer.rawText
-                )
-                try conversationRepository.replaceContent(
-                    parseResult.visibleText,
-                    of: assistantMessageID
-                )
-                if let proposal = parseResult.proposal {
-                    try proposal.validateForCreation(referenceDate: Date())
-                    let diaryRepository = DiaryRepository(context: modelContext)
-                    if try diaryRepository.fetchReminders(
+            let parseResult = try await resolvedReminderReply(
+                initialReply: initialReply,
+                latestUserText: text,
+                requestMessages: requestMessages,
+                profile: profile,
+                apiKey: apiKey,
+                assistantMessageID: assistantMessageID,
+                repository: conversationRepository
+            )
+            try conversationRepository.replaceContent(
+                parseResult.visibleText,
+                of: assistantMessageID
+            )
+            if let proposal = parseResult.proposal {
+                let diaryRepository = DiaryRepository(context: modelContext)
+                if try diaryRepository.fetchReminders(
+                    sourceMessageID: assistantMessageID
+                ).isEmpty {
+                    let reminder = try diaryRepository.createReminderProposal(
+                        proposal,
                         sourceMessageID: assistantMessageID
-                    ).isEmpty {
-                        let reminder = try diaryRepository.createReminderProposal(
-                            proposal,
-                            sourceMessageID: assistantMessageID
+                    )
+                    let resolvedProposal = try await ReminderAutoSchedulingService(
+                        calendarClient: EventKitCalendarClient()
+                    ).resolve(proposal)
+                    if resolvedProposal != proposal {
+                        try diaryRepository.updateReminderProposal(
+                            id: reminder.id,
+                            proposal: resolvedProposal
                         )
-                        let resolvedProposal = try await ReminderAutoSchedulingService(
-                            calendarClient: EventKitCalendarClient()
-                        ).resolve(proposal)
-                        if resolvedProposal != proposal {
-                            try diaryRepository.updateReminderProposal(
-                                id: reminder.id,
-                                proposal: resolvedProposal
-                            )
-                        }
                     }
                 }
             }
         } catch {
             errorMessage = localizedMessage(for: error)
         }
+    }
+
+    @MainActor
+    private func streamedReply(
+        profile: ProviderProfile,
+        apiKey: String,
+        messages: [ChatMessage],
+        assistantMessageID: UUID,
+        repository: ConversationRepository
+    ) async throws -> String {
+        try repository.replaceContent("", of: assistantMessageID)
+        let stream = try await ProviderStreamingClient().events(
+            profile: profile,
+            apiKey: apiKey,
+            messages: messages
+        )
+        var reminderBuffer = ReminderProposalStreamBuffer()
+
+        statusText = localization.strings.generatingReply
+        streamLoop:
+        for try await event in stream {
+            switch event {
+            case let .textDelta(delta):
+                reminderBuffer.append(delta)
+                try repository.replaceContent(
+                    reminderBuffer.visibleText,
+                    of: assistantMessageID
+                )
+            case .reasoningDelta:
+                statusText = localization.strings.thinking
+            case .done:
+                break streamLoop
+            }
+        }
+        reminderBuffer.finish()
+        return reminderBuffer.rawText
+    }
+
+    @MainActor
+    private func resolvedReminderReply(
+        initialReply: String,
+        latestUserText: String,
+        requestMessages: [ChatMessage],
+        profile: ProviderProfile,
+        apiKey: String,
+        assistantMessageID: UUID,
+        repository: ConversationRepository
+    ) async throws -> ReminderProposalParseResult {
+        let policy = ReminderResponseRepairPolicy()
+        let initialResult: ReminderProposalParseResult?
+        let repairError: Error?
+
+        do {
+            initialResult = try parseValidatedReminderReply(initialReply)
+            repairError = nil
+        } catch {
+            initialResult = nil
+            repairError = error
+        }
+
+        let shouldRepair = repairError != nil || policy.shouldRequestStructuredProposal(
+            latestUserText: latestUserText,
+            assistantText: initialResult?.visibleText ?? initialReply,
+            hasProposal: initialResult?.proposal != nil
+        )
+        guard shouldRepair else {
+            return initialResult!
+        }
+
+        let repairedReply = try await streamedReply(
+            profile: profile,
+            apiKey: apiKey,
+            messages: requestMessages + [
+                ChatMessage(role: .assistant, content: initialReply),
+                ChatMessage(
+                    role: .user,
+                    content: policy.correctionPrompt(previousError: repairError)
+                ),
+            ],
+            assistantMessageID: assistantMessageID,
+            repository: repository
+        )
+        guard let repairedResult = try? parseValidatedReminderReply(repairedReply) else {
+            return ReminderProposalParseResult(
+                visibleText: policy.safeFallback(language: localization.language),
+                proposal: nil
+            )
+        }
+        guard !policy.shouldRequestStructuredProposal(
+            latestUserText: latestUserText,
+            assistantText: repairedResult.visibleText,
+            hasProposal: repairedResult.proposal != nil
+        ) else {
+            return ReminderProposalParseResult(
+                visibleText: policy.safeFallback(language: localization.language),
+                proposal: nil
+            )
+        }
+        return repairedResult
+    }
+
+    private func parseValidatedReminderReply(
+        _ rawText: String
+    ) throws -> ReminderProposalParseResult {
+        let result = try ReminderProposalEnvelopeParser().parse(rawText)
+        try result.proposal?.validateForCreation(referenceDate: Date())
+        return result
     }
 
     private func chatMessages(from records: [MessageRecord]) throws -> [ChatMessage] {
