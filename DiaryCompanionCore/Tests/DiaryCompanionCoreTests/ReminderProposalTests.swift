@@ -116,6 +116,25 @@ func reminderProposalSupportsCodableRoundTrip(recurrence: ReminderRecurrenceRule
     #expect(decoded == proposal)
 }
 
+@Test func decodesLegacyReminderProposalJSONWithOutputDefaults() throws {
+    let encoded = try JSONEncoder().encode(makeProposal())
+    var json = try #require(
+        JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    json.removeValue(forKey: "notificationLeadMinutes")
+    json.removeValue(forKey: "alarmEnabled")
+    json.removeValue(forKey: "alarmLeadMinutes")
+
+    let decoded = try JSONDecoder().decode(
+        ReminderProposal.self,
+        from: JSONSerialization.data(withJSONObject: json)
+    )
+
+    #expect(decoded.notificationLeadMinutes == 0)
+    #expect(!decoded.alarmEnabled)
+    #expect(decoded.alarmLeadMinutes == 0)
+}
+
 @Test func rejectsEmptyTitle() {
     #expect(throws: ReminderProposalValidationError.emptyTitle) {
         try makeProposal(title: " \n\t").validate()

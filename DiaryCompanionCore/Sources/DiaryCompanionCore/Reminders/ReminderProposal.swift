@@ -185,6 +185,21 @@ extension ReminderProposalValidationError: LocalizedError {
 }
 
 public struct ReminderProposal: Codable, Equatable, Sendable {
+    private enum CodingKeys: String, CodingKey {
+        case title
+        case notes
+        case start
+        case durationMinutes
+        case recurrence
+        case schedulingMode
+        case searchWindow
+        case notificationEnabled
+        case notificationLeadMinutes
+        case alarmEnabled
+        case alarmLeadMinutes
+        case calendarEnabled
+    }
+
     public var title: String
     public var notes: String
     public var start: Date?
@@ -224,6 +239,36 @@ public struct ReminderProposal: Codable, Equatable, Sendable {
         self.alarmEnabled = alarmEnabled
         self.alarmLeadMinutes = alarmLeadMinutes
         self.calendarEnabled = calendarEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            title: try container.decode(String.self, forKey: .title),
+            notes: try container.decode(String.self, forKey: .notes),
+            start: try container.decodeIfPresent(Date.self, forKey: .start),
+            durationMinutes: try container.decode(Int.self, forKey: .durationMinutes),
+            recurrence: try container.decode(ReminderRecurrenceRule.self, forKey: .recurrence),
+            schedulingMode: try container.decode(ReminderSchedulingMode.self, forKey: .schedulingMode),
+            searchWindow: try container.decodeIfPresent(
+                ReminderSearchWindow.self,
+                forKey: .searchWindow
+            ),
+            notificationEnabled: try container.decode(Bool.self, forKey: .notificationEnabled),
+            notificationLeadMinutes: try container.decodeIfPresent(
+                Int.self,
+                forKey: .notificationLeadMinutes
+            ) ?? 0,
+            alarmEnabled: try container.decodeIfPresent(
+                Bool.self,
+                forKey: .alarmEnabled
+            ) ?? false,
+            alarmLeadMinutes: try container.decodeIfPresent(
+                Int.self,
+                forKey: .alarmLeadMinutes
+            ) ?? 0,
+            calendarEnabled: try container.decode(Bool.self, forKey: .calendarEnabled)
+        )
     }
 
     public func validate() throws {
