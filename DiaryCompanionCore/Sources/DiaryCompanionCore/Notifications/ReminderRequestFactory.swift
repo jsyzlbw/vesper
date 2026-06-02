@@ -68,13 +68,14 @@ public struct ReminderRequestFactory: Sendable {
             recurrence: proposal.recurrence,
             anchor: anchor,
             windowStart: windowStart,
-            windowEnd: windowEnd
-        ).sorted().prefix(maxRequests).map { occurrence in
+            windowEnd: windowEnd,
+            notificationLeadMinutes: proposal.notificationLeadMinutes
+        ).sorted().prefix(maxRequests).map { fireDate in
             makeRequest(
-                id: "\(prefix).at.\(Int64(occurrence.timeIntervalSince1970))",
+                id: "\(prefix).at.\(Int64(fireDate.timeIntervalSince1970))",
                 title: proposal.title,
                 body: proposal.notes,
-                fireDate: occurrence
+                fireDate: fireDate
             )
         }
     }
@@ -85,16 +86,19 @@ private extension ReminderRequestFactory {
         recurrence: ReminderRecurrenceRule,
         anchor: Date,
         windowStart: Date,
-        windowEnd: Date
+        windowEnd: Date,
+        notificationLeadMinutes: Int
     ) -> [Date] {
         var occurrences: [Date] = []
         var occurrenceCount = 0
         let end = recurrence.end
+        let eventWindowEnd = calendar.date(
+            byAdding: .minute,
+            value: notificationLeadMinutes,
+            to: windowEnd
+        )!
 
         func shouldContinue(_ occurrence: Date) -> Bool {
-            guard occurrence < windowEnd else {
-                return false
-            }
             if case let .date(endDate) = end, occurrence > endDate {
                 return false
             }
@@ -106,12 +110,18 @@ private extension ReminderRequestFactory {
         }
 
         func record(_ occurrence: Date) -> Bool {
-            guard shouldContinue(occurrence) else {
+            guard shouldContinue(occurrence),
+                  let fireDate = calendar.date(
+                      byAdding: .minute,
+                      value: -notificationLeadMinutes,
+                      to: occurrence
+                  ),
+                  fireDate < windowEnd else {
                 return false
             }
             occurrenceCount += 1
-            if occurrence >= windowStart {
-                occurrences.append(occurrence)
+            if fireDate >= windowStart {
+                occurrences.append(fireDate)
             }
             return true
         }
@@ -140,7 +150,7 @@ private extension ReminderRequestFactory {
                 byAdding: .weekOfYear,
                 value: weekOffset,
                 to: anchorWeek
-            ), week < windowEnd {
+            ), week < eventWindowEnd {
                 let weeklyOccurrences = weekdays.compactMap { weekday in
                     weeklyOccurrence(
                         in: week,
@@ -161,7 +171,7 @@ private extension ReminderRequestFactory {
                 byAdding: .month,
                 value: monthOffset,
                 to: startOfMonth(containing: anchor)
-            ), month < windowEnd {
+            ), month < eventWindowEnd {
                 if let occurrence = monthlyOccurrence(
                     in: month,
                     day: day,
@@ -177,7 +187,7 @@ private extension ReminderRequestFactory {
                 byAdding: .month,
                 value: monthOffset,
                 to: startOfMonth(containing: anchor)
-            ), month < windowEnd {
+            ), month < eventWindowEnd {
                 if let lastDay = calendar.range(of: .day, in: .month, for: month)?.last,
                    let occurrence = monthlyOccurrence(
                        in: month,
@@ -195,7 +205,7 @@ private extension ReminderRequestFactory {
             var yearOffset = 0
             while let occurrenceYear = calendar.date(
                 from: DateComponents(year: anchorYear + yearOffset)
-            ), occurrenceYear < windowEnd {
+            ), occurrenceYear < eventWindowEnd {
                 if let occurrence = yearlyOccurrence(
                     year: anchorYear + yearOffset,
                     month: month,

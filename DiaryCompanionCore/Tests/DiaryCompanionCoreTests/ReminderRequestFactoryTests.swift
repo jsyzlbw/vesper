@@ -110,6 +110,20 @@ private let reminderID = UUID(uuidString: "4BE4CF6D-B6D8-4BF0-A06F-89E9767A55CC"
     ])
 }
 
+@Test func schedulesBiweeklySundayNotificationThirtyMinutesBeforeEvent() throws {
+    let requests = try makeRequests(
+        start: date(2026, 1, 4, 15),
+        recurrence: .weekly(interval: 2, weekdays: [.sunday], end: nil),
+        windowStart: date(2026, 1, 18),
+        windowDays: 1,
+        notificationLeadMinutes: 30
+    )
+
+    #expect(try requests.map(fireDate) == [
+        date(2026, 1, 18, 14, 30),
+    ])
+}
+
 @Test func ordersWeeklyConcreteOccurrencesByDateForMondayFirstCalendar() throws {
     var calendar = utcCalendar
     calendar.firstWeekday = 2
@@ -376,11 +390,16 @@ private func makeRequests(
     recurrence: ReminderRecurrenceRule,
     windowStart: Date,
     windowDays: Int = 90,
-    maxRequests: Int = 60
+    maxRequests: Int = 60,
+    notificationLeadMinutes: Int = 0
 ) throws -> [UNNotificationRequest] {
     try ReminderRequestFactory(calendar: utcCalendar).makeRequests(
         reminderID: reminderID,
-        proposal: makeProposal(start: start, recurrence: recurrence),
+        proposal: makeProposal(
+            start: start,
+            recurrence: recurrence,
+            notificationLeadMinutes: notificationLeadMinutes
+        ),
         windowStart: windowStart,
         windowDays: windowDays,
         maxRequests: maxRequests
@@ -391,7 +410,8 @@ private func makeProposal(
     start: Date? = date(2026, 1, 1, 9),
     recurrence: ReminderRecurrenceRule = .once,
     schedulingMode: ReminderSchedulingMode = .fixed,
-    searchWindow: ReminderSearchWindow? = nil
+    searchWindow: ReminderSearchWindow? = nil,
+    notificationLeadMinutes: Int = 0
 ) -> ReminderProposal {
     ReminderProposal(
         title: "Review plan",
@@ -402,6 +422,7 @@ private func makeProposal(
         schedulingMode: schedulingMode,
         searchWindow: searchWindow,
         notificationEnabled: true,
+        notificationLeadMinutes: notificationLeadMinutes,
         calendarEnabled: false
     )
 }
