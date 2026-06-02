@@ -65,10 +65,13 @@ import Testing
     ])
 }
 
+@MainActor
 @Test func unavailableAlarmClientRejectsScheduling() async throws {
     let client: any AlarmClient = UnavailableAlarmClient()
 
-    #expect(try await client.requestAuthorization() == false)
+    await #expect(throws: AlarmClientError.alarmRequiresIOS26) {
+        try await client.requestAuthorization()
+    }
     await #expect(throws: AlarmClientError.alarmRequiresIOS26) {
         try await client.schedule(
             reminderID: UUID(),
@@ -79,6 +82,7 @@ import Testing
     try client.remove(ids: ["alarm-id"])
 }
 
+@MainActor
 @Test func unavailableAlarmClientIgnoresDisabledAlarm() async throws {
     let client = UnavailableAlarmClient()
 

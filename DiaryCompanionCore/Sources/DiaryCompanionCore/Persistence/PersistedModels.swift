@@ -105,12 +105,17 @@ import SwiftData
     public var searchWindowStart: Date?
     public var searchWindowEnd: Date?
     public var notificationEnabled: Bool = false
+    public var notificationLeadMinutes: Int = 0
+    public var alarmEnabled: Bool = false
+    public var alarmLeadMinutes: Int = 0
     public var calendarEnabled: Bool = false
     public var status: String = ReminderProposalStatus.pendingConfirmation.rawValue
     public var notificationResult: String = ReminderExecutionResult.notRequested.rawValue
+    public var alarmResult: String = ReminderExecutionResult.notRequested.rawValue
     public var calendarResult: String = ReminderExecutionResult.notRequested.rawValue
     public var sourceMessageID: UUID?
     public var notificationIdentifiers: [String] = []
+    public var alarmIdentifiers: [String] = []
     public var calendarEventIdentifier: String?
     public var calendarExternalIdentifier: String?
 
@@ -137,6 +142,9 @@ import SwiftData
             ?? Data(#"{"once":{}}"#.utf8)
         self.schedulingMode = ReminderSchedulingMode.fixed.rawValue
         self.notificationEnabled = true
+        self.notificationLeadMinutes = 0
+        self.alarmEnabled = false
+        self.alarmLeadMinutes = 0
         self.calendarEnabled = false
         self.status = isScheduled
             ? ReminderProposalStatus.scheduled.rawValue
@@ -144,6 +152,7 @@ import SwiftData
         self.notificationResult = isScheduled
             ? ReminderExecutionResult.scheduled.rawValue
             : ReminderExecutionResult.notRequested.rawValue
+        self.alarmResult = ReminderExecutionResult.notRequested.rawValue
         self.calendarResult = ReminderExecutionResult.notRequested.rawValue
     }
 
@@ -159,12 +168,17 @@ import SwiftData
         searchWindowStart: Date?,
         searchWindowEnd: Date?,
         notificationEnabled: Bool,
+        notificationLeadMinutes: Int = 0,
+        alarmEnabled: Bool = false,
+        alarmLeadMinutes: Int = 0,
         calendarEnabled: Bool,
         status: String = ReminderProposalStatus.pendingConfirmation.rawValue,
         notificationResult: String = ReminderExecutionResult.notRequested.rawValue,
+        alarmResult: String = ReminderExecutionResult.notRequested.rawValue,
         calendarResult: String = ReminderExecutionResult.notRequested.rawValue,
         sourceMessageID: UUID? = nil,
         notificationIdentifiers: [String] = [],
+        alarmIdentifiers: [String] = [],
         calendarEventIdentifier: String? = nil,
         calendarExternalIdentifier: String? = nil
     ) {
@@ -183,12 +197,17 @@ import SwiftData
         self.searchWindowStart = searchWindowStart
         self.searchWindowEnd = searchWindowEnd
         self.notificationEnabled = notificationEnabled
+        self.notificationLeadMinutes = notificationLeadMinutes
+        self.alarmEnabled = alarmEnabled
+        self.alarmLeadMinutes = alarmLeadMinutes
         self.calendarEnabled = calendarEnabled
         self.status = status
         self.notificationResult = notificationResult
+        self.alarmResult = alarmResult
         self.calendarResult = calendarResult
         self.sourceMessageID = sourceMessageID
         self.notificationIdentifiers = notificationIdentifiers
+        self.alarmIdentifiers = alarmIdentifiers
         self.calendarEventIdentifier = calendarEventIdentifier
         self.calendarExternalIdentifier = calendarExternalIdentifier
     }

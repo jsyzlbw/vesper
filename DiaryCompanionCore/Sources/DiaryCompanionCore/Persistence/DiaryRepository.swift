@@ -99,6 +99,9 @@ public final class DiaryRepository: ReminderPersistence {
             searchWindowStart: proposal.searchWindow?.start,
             searchWindowEnd: proposal.searchWindow?.end,
             notificationEnabled: proposal.notificationEnabled,
+            notificationLeadMinutes: proposal.notificationLeadMinutes,
+            alarmEnabled: proposal.alarmEnabled,
+            alarmLeadMinutes: proposal.alarmLeadMinutes,
             calendarEnabled: proposal.calendarEnabled,
             sourceMessageID: sourceMessageID
         )
@@ -134,6 +137,7 @@ public final class DiaryRepository: ReminderPersistence {
             throw DiaryRepositoryError.invalidReminderStatus(record.status)
         }
         try validateExecutionResult(record.notificationResult)
+        try validateExecutionResult(record.alarmResult)
         try validateExecutionResult(record.calendarResult)
         guard let schedulingMode = ReminderSchedulingMode(rawValue: record.schedulingMode) else {
             throw DiaryRepositoryError.invalidReminderSchedulingMode(record.schedulingMode)
@@ -165,6 +169,9 @@ public final class DiaryRepository: ReminderPersistence {
             schedulingMode: schedulingMode,
             searchWindow: searchWindow,
             notificationEnabled: record.notificationEnabled,
+            notificationLeadMinutes: record.notificationLeadMinutes,
+            alarmEnabled: record.alarmEnabled,
+            alarmLeadMinutes: record.alarmLeadMinutes,
             calendarEnabled: record.calendarEnabled
         )
         try proposal.validate()
@@ -175,16 +182,20 @@ public final class DiaryRepository: ReminderPersistence {
         id: UUID,
         status: ReminderProposalStatus,
         notificationResult: ReminderExecutionResult,
+        alarmResult: ReminderExecutionResult = .notRequested,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String] = [],
         calendarEventIdentifier: String?,
         calendarExternalIdentifier: String?
     ) throws {
         let record = try reminder(id: id)
         record.status = status.rawValue
         record.notificationResult = notificationResult.rawValue
+        record.alarmResult = alarmResult.rawValue
         record.calendarResult = calendarResult.rawValue
         record.notificationIdentifiers = notificationIdentifiers.stableUniqued()
+        record.alarmIdentifiers = alarmIdentifiers.stableUniqued()
         record.calendarEventIdentifier = calendarEventIdentifier
         record.calendarExternalIdentifier = calendarExternalIdentifier
         record.isScheduled = status == .scheduled
@@ -195,8 +206,10 @@ public final class DiaryRepository: ReminderPersistence {
         let record = try reminder(id: id)
         record.status = ReminderProposalStatus.pendingConfirmation.rawValue
         record.notificationResult = ReminderExecutionResult.notRequested.rawValue
+        record.alarmResult = ReminderExecutionResult.notRequested.rawValue
         record.calendarResult = ReminderExecutionResult.notRequested.rawValue
         record.notificationIdentifiers = []
+        record.alarmIdentifiers = []
         record.calendarEventIdentifier = nil
         record.calendarExternalIdentifier = nil
         record.isScheduled = false
@@ -224,6 +237,9 @@ public final class DiaryRepository: ReminderPersistence {
         record.searchWindowStart = proposal.searchWindow?.start
         record.searchWindowEnd = proposal.searchWindow?.end
         record.notificationEnabled = proposal.notificationEnabled
+        record.notificationLeadMinutes = proposal.notificationLeadMinutes
+        record.alarmEnabled = proposal.alarmEnabled
+        record.alarmLeadMinutes = proposal.alarmLeadMinutes
         record.calendarEnabled = proposal.calendarEnabled
         try context.save()
     }
@@ -279,6 +295,9 @@ public final class DiaryRepository: ReminderPersistence {
             schedulingMode: .fixed,
             searchWindow: nil,
             notificationEnabled: true,
+            notificationLeadMinutes: 0,
+            alarmEnabled: false,
+            alarmLeadMinutes: 0,
             calendarEnabled: false
         )
         try proposal.validate()
@@ -288,8 +307,12 @@ public final class DiaryRepository: ReminderPersistence {
         record.durationMinutes = proposal.durationMinutes
         record.recurrenceData = try JSONEncoder().encode(recurrence)
         record.notificationEnabled = proposal.notificationEnabled
+        record.notificationLeadMinutes = proposal.notificationLeadMinutes
+        record.alarmEnabled = proposal.alarmEnabled
+        record.alarmLeadMinutes = proposal.alarmLeadMinutes
         record.status = status.rawValue
         record.notificationResult = notificationResult.rawValue
+        record.alarmResult = ReminderExecutionResult.notRequested.rawValue
         try context.save()
         return proposal
     }
@@ -305,18 +328,24 @@ private extension ReminderRecord {
             && searchWindowStart == nil
             && searchWindowEnd == nil
             && notificationEnabled == false
+            && notificationLeadMinutes == 0
+            && alarmEnabled == false
+            && alarmLeadMinutes == 0
             && calendarEnabled == false
             && status == ReminderProposalStatus.pendingConfirmation.rawValue
             && notificationResult == ReminderExecutionResult.notRequested.rawValue
+            && alarmResult == ReminderExecutionResult.notRequested.rawValue
             && calendarResult == ReminderExecutionResult.notRequested.rawValue
             && sourceMessageID == nil
             && notificationIdentifiers.isEmpty
+            && alarmIdentifiers.isEmpty
             && calendarEventIdentifier == nil
             && calendarExternalIdentifier == nil
     }
 
     var hasExternalResourceIdentifiers: Bool {
         !notificationIdentifiers.isEmpty
+            || !alarmIdentifiers.isEmpty
             || calendarEventIdentifier != nil
             || calendarExternalIdentifier != nil
     }

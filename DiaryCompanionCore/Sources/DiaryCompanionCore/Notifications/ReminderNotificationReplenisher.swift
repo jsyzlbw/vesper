@@ -14,8 +14,10 @@ public protocol ReminderReplenishmentPersistence: AnyObject {
         id: UUID,
         status: ReminderProposalStatus,
         notificationResult: ReminderExecutionResult,
+        alarmResult: ReminderExecutionResult,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String],
         calendarEventIdentifier: String?,
         calendarExternalIdentifier: String?
     ) throws
@@ -100,9 +102,12 @@ public final class ReminderNotificationReplenisher {
                 id: record.id,
                 status: .scheduled,
                 notificationResult: .scheduled,
+                alarmResult: ReminderExecutionResult(rawValue: record.alarmResult)
+                    ?? .notRequested,
                 calendarResult: ReminderExecutionResult(rawValue: record.calendarResult)
                     ?? .notRequested,
                 notificationIdentifiers: identifiers,
+                alarmIdentifiers: record.alarmIdentifiers,
                 calendarEventIdentifier: record.calendarEventIdentifier,
                 calendarExternalIdentifier: record.calendarExternalIdentifier
             )

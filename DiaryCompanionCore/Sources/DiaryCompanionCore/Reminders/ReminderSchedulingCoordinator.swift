@@ -14,8 +14,10 @@ public protocol ReminderPersistence: AnyObject {
         id: UUID,
         status: ReminderProposalStatus,
         notificationResult: ReminderExecutionResult,
+        alarmResult: ReminderExecutionResult,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String],
         calendarEventIdentifier: String?,
         calendarExternalIdentifier: String?
     ) throws
@@ -30,6 +32,7 @@ public final class ReminderSchedulingCoordinator {
 
     private let repository: any ReminderPersistence
     private let notificationClient: ReminderNotificationClient
+    private let alarmClient: any AlarmClient
     private let calendarClient: CalendarClient
     private let cleanupJournal: any ReminderCleanupJournaling
     private let makeRequests: RequestFactory
@@ -38,6 +41,7 @@ public final class ReminderSchedulingCoordinator {
     public init(
         repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
+        alarmClient: any AlarmClient = UnavailableAlarmClient(),
         calendarClient: CalendarClient,
         cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: ReminderRequestFactory = ReminderRequestFactory(),
@@ -45,6 +49,7 @@ public final class ReminderSchedulingCoordinator {
     ) {
         self.repository = repository
         self.notificationClient = notificationClient
+        self.alarmClient = alarmClient
         self.calendarClient = calendarClient
         self.cleanupJournal = cleanupJournal
         makeRequests = { reminderID, proposal, windowStart in
@@ -60,6 +65,7 @@ public final class ReminderSchedulingCoordinator {
     init(
         repository: any ReminderPersistence,
         notificationClient: ReminderNotificationClient,
+        alarmClient: any AlarmClient = UnavailableAlarmClient(),
         calendarClient: CalendarClient,
         cleanupJournal: any ReminderCleanupJournaling = FileReminderCleanupJournal(),
         requestFactory: @escaping RequestFactory,
@@ -67,6 +73,7 @@ public final class ReminderSchedulingCoordinator {
     ) {
         self.repository = repository
         self.notificationClient = notificationClient
+        self.alarmClient = alarmClient
         self.calendarClient = calendarClient
         self.cleanupJournal = cleanupJournal
         makeRequests = requestFactory
@@ -85,18 +92,24 @@ public final class ReminderSchedulingCoordinator {
         var notificationResult: ReminderExecutionResult = proposal.notificationEnabled
             ? .pending
             : .notRequested
+        var alarmResult: ReminderExecutionResult = proposal.alarmEnabled
+            ? .pending
+            : .notRequested
         var calendarResult: ReminderExecutionResult = proposal.calendarEnabled
             ? .pending
             : .notRequested
         var notificationIdentifiers: [String] = []
+        var alarmIdentifiers: [String] = []
         var calendarReference: CalendarEventReference?
 
         try persist(
             reminderID: reminderID,
             status: .executing,
             notificationResult: notificationResult,
+            alarmResult: alarmResult,
             calendarResult: calendarResult,
             notificationIdentifiers: notificationIdentifiers,
+            alarmIdentifiers: alarmIdentifiers,
             calendarReference: calendarReference
         )
 
@@ -114,6 +127,7 @@ public final class ReminderSchedulingCoordinator {
                         try saveCleanupJournal(
                             reminderID: reminderID,
                             notificationIdentifiers: notificationIdentifiers,
+                            alarmIdentifiers: alarmIdentifiers,
                             calendarReference: calendarReference
                         )
                     } catch {
@@ -133,8 +147,10 @@ public final class ReminderSchedulingCoordinator {
                     try compensate(
                         reminderID: reminderID,
                         notificationResult: notificationResult,
+                        alarmResult: alarmResult,
                         calendarResult: calendarResult,
                         notificationIdentifiers: notificationIdentifiers,
+                        alarmIdentifiers: alarmIdentifiers,
                         calendarReference: calendarReference
                     )
                     throw error
@@ -146,16 +162,88 @@ public final class ReminderSchedulingCoordinator {
                     reminderID: reminderID,
                     status: .executing,
                     notificationResult: notificationResult,
+                    alarmResult: alarmResult,
                     calendarResult: calendarResult,
                     notificationIdentifiers: notificationIdentifiers,
+                    alarmIdentifiers: alarmIdentifiers,
                     calendarReference: calendarReference
                 )
             } catch {
                 try compensate(
                     reminderID: reminderID,
                     notificationResult: notificationResult,
+                    alarmResult: alarmResult,
                     calendarResult: calendarResult,
                     notificationIdentifiers: notificationIdentifiers,
+                    alarmIdentifiers: alarmIdentifiers,
+                    calendarReference: calendarReference
+                )
+                throw error
+            }
+        }
+
+        if proposal.alarmEnabled {
+            do {
+                try Task.checkCancellation()
+                let isAuthorized = try await alarmClient.requestAuthorization()
+                try Task.checkCancellation()
+                if isAuthorized {
+                    alarmIdentifiers = try await alarmClient.schedule(
+                        reminderID: reminderID,
+                        proposal: proposal,
+                        windowStart: now()
+                    )
+                    do {
+                        try saveCleanupJournal(
+                            reminderID: reminderID,
+                            notificationIdentifiers: notificationIdentifiers,
+                            alarmIdentifiers: alarmIdentifiers,
+                            calendarReference: calendarReference
+                        )
+                    } catch {
+                        try alarmClient.remove(ids: alarmIdentifiers)
+                        alarmIdentifiers = []
+                        throw error
+                    }
+                    try Task.checkCancellation()
+                    alarmResult = .scheduled
+                } else {
+                    alarmResult = .permissionDenied
+                }
+            } catch {
+                if error is CancellationError || error as? AlarmClientError == .alarmRequiresIOS26 {
+                    try compensate(
+                        reminderID: reminderID,
+                        notificationResult: notificationResult,
+                        alarmResult: alarmResult,
+                        calendarResult: calendarResult,
+                        notificationIdentifiers: notificationIdentifiers,
+                        alarmIdentifiers: alarmIdentifiers,
+                        calendarReference: calendarReference
+                    )
+                    throw error
+                }
+                alarmResult = .failed
+            }
+            do {
+                try persist(
+                    reminderID: reminderID,
+                    status: .executing,
+                    notificationResult: notificationResult,
+                    alarmResult: alarmResult,
+                    calendarResult: calendarResult,
+                    notificationIdentifiers: notificationIdentifiers,
+                    alarmIdentifiers: alarmIdentifiers,
+                    calendarReference: calendarReference
+                )
+            } catch {
+                try compensate(
+                    reminderID: reminderID,
+                    notificationResult: notificationResult,
+                    alarmResult: alarmResult,
+                    calendarResult: calendarResult,
+                    notificationIdentifiers: notificationIdentifiers,
+                    alarmIdentifiers: alarmIdentifiers,
                     calendarReference: calendarReference
                 )
                 throw error
@@ -174,6 +262,7 @@ public final class ReminderSchedulingCoordinator {
                         try saveCleanupJournal(
                             reminderID: reminderID,
                             notificationIdentifiers: notificationIdentifiers,
+                            alarmIdentifiers: alarmIdentifiers,
                             calendarReference: calendarReference
                         )
                     } catch {
@@ -198,8 +287,10 @@ public final class ReminderSchedulingCoordinator {
                     try compensate(
                         reminderID: reminderID,
                         notificationResult: notificationResult,
+                        alarmResult: alarmResult,
                         calendarResult: calendarResult,
                         notificationIdentifiers: notificationIdentifiers,
+                        alarmIdentifiers: alarmIdentifiers,
                         calendarReference: calendarReference
                     )
                     throw error
@@ -213,8 +304,10 @@ public final class ReminderSchedulingCoordinator {
                 reminderID: reminderID,
                 status: .scheduled,
                 notificationResult: notificationResult,
+                alarmResult: alarmResult,
                 calendarResult: calendarResult,
                 notificationIdentifiers: notificationIdentifiers,
+                alarmIdentifiers: alarmIdentifiers,
                 calendarReference: calendarReference
             )
             try cleanupJournal.remove(reminderID: reminderID)
@@ -222,8 +315,10 @@ public final class ReminderSchedulingCoordinator {
             try compensate(
                 reminderID: reminderID,
                 notificationResult: notificationResult,
+                alarmResult: alarmResult,
                 calendarResult: calendarResult,
                 notificationIdentifiers: notificationIdentifiers,
+                alarmIdentifiers: alarmIdentifiers,
                 calendarReference: calendarReference
             )
             throw error
@@ -259,6 +354,7 @@ public final class ReminderSchedulingCoordinator {
             try saveCleanupJournal(
                 reminderID: reminderID,
                 notificationIdentifiers: record.notificationIdentifiers,
+                alarmIdentifiers: record.alarmIdentifiers,
                 calendarReference: record.calendarEventIdentifier.map {
                     CalendarEventReference(
                         eventIdentifier: $0,
@@ -299,6 +395,12 @@ public final class ReminderSchedulingCoordinator {
                 reference: reference
             )
         }
+        try alarmClient.remove(
+            ids: stableUniqued(
+                record.alarmIdentifiers
+                    + (journalEntry?.alarmIdentifiers ?? [])
+            )
+        )
         notificationClient.removePendingRequests(
             withIdentifiers: stableUniqued(
                 record.notificationIdentifiers
@@ -311,16 +413,20 @@ public final class ReminderSchedulingCoordinator {
         reminderID: UUID,
         status: ReminderProposalStatus,
         notificationResult: ReminderExecutionResult,
+        alarmResult: ReminderExecutionResult,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String],
         calendarReference: CalendarEventReference?
     ) throws {
         try repository.updateReminderExecution(
             id: reminderID,
             status: status,
             notificationResult: notificationResult,
+            alarmResult: alarmResult,
             calendarResult: calendarResult,
             notificationIdentifiers: notificationIdentifiers,
+            alarmIdentifiers: alarmIdentifiers,
             calendarEventIdentifier: calendarReference?.eventIdentifier,
             calendarExternalIdentifier: calendarReference?.externalIdentifier
         )
@@ -329,8 +435,10 @@ public final class ReminderSchedulingCoordinator {
     private func compensate(
         reminderID: UUID,
         notificationResult: ReminderExecutionResult,
+        alarmResult: ReminderExecutionResult,
         calendarResult: ReminderExecutionResult,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String],
         calendarReference: CalendarEventReference?
     ) throws {
         let record = try? repository.reminder(id: reminderID)
@@ -346,34 +454,47 @@ public final class ReminderSchedulingCoordinator {
                 + (record?.notificationIdentifiers ?? [])
                 + (journalEntry?.notificationIdentifiers ?? [])
         )
+        let alarmIDs = stableUniqued(
+            alarmIdentifiers
+                + (record?.alarmIdentifiers ?? [])
+                + (journalEntry?.alarmIdentifiers ?? [])
+        )
         let recoveryReference = calendarReference
             ?? journalEntry?.calendarReference
             ?? persistedCalendarReference
         try saveCleanupJournal(
             reminderID: reminderID,
             notificationIdentifiers: identifiers,
+            alarmIdentifiers: alarmIDs,
             calendarReference: recoveryReference
         )
         try? persist(
             reminderID: reminderID,
             status: .executing,
             notificationResult: notificationResult,
+            alarmResult: alarmResult,
             calendarResult: calendarResult,
             notificationIdentifiers: identifiers,
+            alarmIdentifiers: alarmIDs,
             calendarReference: recoveryReference
         )
-        var didFailCalendarCleanup = false
+        var didFailCleanup = false
         if let recoveryReference {
             do {
                 try calendarClient.removeEvent(reference: recoveryReference)
             } catch {
-                didFailCalendarCleanup = true
+                didFailCleanup = true
             }
+        }
+        do {
+            try alarmClient.remove(ids: alarmIDs)
+        } catch {
+            didFailCleanup = true
         }
         if !identifiers.isEmpty {
             notificationClient.removePendingRequests(withIdentifiers: identifiers)
         }
-        guard !didFailCalendarCleanup else {
+        guard !didFailCleanup else {
             throw ReminderSchedulingCoordinatorError.cleanupFailed
         }
         try repository.resetReminderExecution(id: reminderID)
@@ -383,16 +504,21 @@ public final class ReminderSchedulingCoordinator {
     private func saveCleanupJournal(
         reminderID: UUID,
         notificationIdentifiers: [String],
+        alarmIdentifiers: [String],
         calendarReference: CalendarEventReference?
     ) throws {
-        guard calendarReference != nil || !notificationIdentifiers.isEmpty else {
+        guard calendarReference != nil
+                || !notificationIdentifiers.isEmpty
+                || !alarmIdentifiers.isEmpty
+        else {
             return
         }
         try cleanupJournal.save(
             reminderID: reminderID,
             entry: ReminderCleanupJournalEntry(
                 calendarReference: calendarReference,
-                notificationIdentifiers: stableUniqued(notificationIdentifiers)
+                notificationIdentifiers: stableUniqued(notificationIdentifiers),
+                alarmIdentifiers: stableUniqued(alarmIdentifiers)
             )
         )
     }

@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 public protocol AlarmClient: AnyObject {
     func requestAuthorization() async throws -> Bool
     func schedule(
@@ -19,7 +20,7 @@ public final class UnavailableAlarmClient: AlarmClient {
     public init() {}
 
     public func requestAuthorization() async throws -> Bool {
-        false
+        throw AlarmClientError.alarmRequiresIOS26
     }
 
     public func schedule(

@@ -27,6 +27,24 @@ import Testing
 }
 
 @MainActor
+@Test func reminderProposalRoundTripsLeadTimesAndAlarmIntent() throws {
+    let repository = try makeReminderRepository()
+    var proposal = makeFixedProposal(start: Date(timeIntervalSince1970: 5_000))
+    proposal.notificationLeadMinutes = 30
+    proposal.alarmEnabled = true
+    proposal.alarmLeadMinutes = 30
+
+    let record = try repository.createReminderProposal(proposal, sourceMessageID: nil)
+
+    #expect(record.notificationLeadMinutes == 30)
+    #expect(record.alarmEnabled)
+    #expect(record.alarmLeadMinutes == 30)
+    #expect(record.alarmResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.alarmIdentifiers.isEmpty)
+    #expect(try repository.reminderProposal(from: record) == proposal)
+}
+
+@MainActor
 @Test func reminderExecutionUpdatePersistsResultsAndIdentifiers() throws {
     let repository = try makeReminderRepository()
     let record = try repository.createReminderProposal(
@@ -38,11 +56,17 @@ import Testing
         id: record.id,
         status: .scheduled,
         notificationResult: .scheduled,
+        alarmResult: .scheduled,
         calendarResult: .permissionDenied,
         notificationIdentifiers: [
             "notification-1",
             "notification-2",
             "notification-1",
+        ],
+        alarmIdentifiers: [
+            "alarm-1",
+            "alarm-2",
+            "alarm-1",
         ],
         calendarEventIdentifier: "calendar-1",
         calendarExternalIdentifier: "external-1"
@@ -51,8 +75,10 @@ import Testing
     let fetched = try #require(repository.fetchReminders().first)
     #expect(fetched.status == ReminderProposalStatus.scheduled.rawValue)
     #expect(fetched.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(fetched.alarmResult == ReminderExecutionResult.scheduled.rawValue)
     #expect(fetched.calendarResult == ReminderExecutionResult.permissionDenied.rawValue)
     #expect(fetched.notificationIdentifiers == ["notification-1", "notification-2"])
+    #expect(fetched.alarmIdentifiers == ["alarm-1", "alarm-2"])
     #expect(fetched.calendarEventIdentifier == "calendar-1")
     #expect(fetched.calendarExternalIdentifier == "external-1")
 }
@@ -83,6 +109,11 @@ import Testing
     ))
     #expect(record.status == ReminderProposalStatus.scheduled.rawValue)
     #expect(record.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(record.notificationLeadMinutes == 0)
+    #expect(!record.alarmEnabled)
+    #expect(record.alarmLeadMinutes == 0)
+    #expect(record.alarmResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.alarmIdentifiers.isEmpty)
     #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
 }
 
@@ -250,8 +281,10 @@ import Testing
         id: record.id,
         status: .scheduled,
         notificationResult: .scheduled,
+        alarmResult: .scheduled,
         calendarResult: .created,
         notificationIdentifiers: ["notification-1"],
+        alarmIdentifiers: ["alarm-1"],
         calendarEventIdentifier: "calendar-1",
         calendarExternalIdentifier: "external-1"
     )
@@ -260,8 +293,10 @@ import Testing
 
     #expect(record.status == ReminderProposalStatus.pendingConfirmation.rawValue)
     #expect(record.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(record.alarmResult == ReminderExecutionResult.notRequested.rawValue)
     #expect(record.calendarResult == ReminderExecutionResult.notRequested.rawValue)
     #expect(record.notificationIdentifiers.isEmpty)
+    #expect(record.alarmIdentifiers.isEmpty)
     #expect(record.calendarEventIdentifier == nil)
     #expect(record.calendarExternalIdentifier == nil)
     #expect(record.isScheduled == false)

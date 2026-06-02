@@ -3,13 +3,38 @@ import Foundation
 public struct ReminderCleanupJournalEntry: Codable, Equatable, Sendable {
     public var calendarReference: CalendarEventReference?
     public var notificationIdentifiers: [String]
+    public var alarmIdentifiers: [String]
 
     public init(
         calendarReference: CalendarEventReference?,
-        notificationIdentifiers: [String]
+        notificationIdentifiers: [String],
+        alarmIdentifiers: [String] = []
     ) {
         self.calendarReference = calendarReference
         self.notificationIdentifiers = notificationIdentifiers
+        self.alarmIdentifiers = alarmIdentifiers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case calendarReference
+        case notificationIdentifiers
+        case alarmIdentifiers
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        calendarReference = try container.decodeIfPresent(
+            CalendarEventReference.self,
+            forKey: .calendarReference
+        )
+        notificationIdentifiers = try container.decode(
+            [String].self,
+            forKey: .notificationIdentifiers
+        )
+        alarmIdentifiers = try container.decodeIfPresent(
+            [String].self,
+            forKey: .alarmIdentifiers
+        ) ?? []
     }
 }
 
