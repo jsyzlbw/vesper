@@ -102,3 +102,71 @@ func makeAlarmClient() -> any AlarmClient {
 #endif
     return UnavailableAlarmClient()
 }
+
+enum AlarmKitDebugProbe {
+    @MainActor
+    static func runIfRequested() async {
+#if DEBUG && canImport(AlarmKit)
+        guard CommandLine.arguments.contains("--alarmkit-smoke") else {
+            return
+        }
+        guard #available(iOS 26.0, *) else {
+            print("VESPER_ALARMKIT_SMOKE unsupported-ios")
+            return
+        }
+
+        let seconds = smokeDelaySeconds
+        let fireDate = Date().addingTimeInterval(seconds)
+        let identifier = UUID()
+        let proposal = ReminderProposal(
+            title: "Vesper AlarmKit Smoke Test",
+            notes: "Debug-only real-device AlarmKit probe.",
+            start: fireDate,
+            durationMinutes: 1,
+            recurrence: .once,
+            schedulingMode: .fixed,
+            searchWindow: nil,
+            notificationEnabled: false,
+            alarmEnabled: true,
+            alarmLeadMinutes: 0,
+            calendarEnabled: false
+        )
+        let client = AlarmKitAlarmClient()
+
+        do {
+            let authorized = try await client.requestAuthorization()
+            guard authorized else {
+                print("VESPER_ALARMKIT_SMOKE authorization-denied")
+                return
+            }
+            try await client.schedule(
+                reminderID: identifier,
+                proposal: proposal,
+                occurrences: [
+                    AlarmOccurrence(identifier: identifier, fireDate: fireDate),
+                ]
+            )
+            let alarms = try AlarmManager.shared.alarms
+            let registered = alarms.contains { $0.id == identifier }
+            print(
+                "VESPER_ALARMKIT_SMOKE registered=\(registered)"
+                    + " id=\(identifier.uuidString)"
+                    + " daemonCount=\(alarms.count)"
+                    + " delaySeconds=\(Int(seconds))"
+            )
+        } catch {
+            print("VESPER_ALARMKIT_SMOKE error=\(String(describing: error))")
+        }
+#endif
+    }
+
+    private static var smokeDelaySeconds: TimeInterval {
+        guard let index = CommandLine.arguments.firstIndex(of: "--alarmkit-smoke"),
+              CommandLine.arguments.indices.contains(index + 1),
+              let value = TimeInterval(CommandLine.arguments[index + 1]),
+              value > 0 else {
+            return 90
+        }
+        return value
+    }
+}

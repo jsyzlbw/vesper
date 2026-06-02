@@ -12,6 +12,9 @@ struct DiaryCompanionApp: App {
             RootTabView()
                 .environment(\.vesperLocalization, localization)
                 .environment(\.locale, localization.locale)
+                .task {
+                    await AlarmKitDebugProbe.runIfRequested()
+                }
         }
         .modelContainer(for: DiarySchema.models)
     }
