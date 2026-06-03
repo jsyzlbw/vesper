@@ -100,7 +100,6 @@ Expected: `** BUILD SUCCEEDED **`
 
 **Files:**
 - Create: `scripts/testflight.sh`
-- Create: `docs/testflight-external-testing-zh-Hans.md`
 - Modify: `DiaryCompanion.xcodeproj/project.pbxproj`
 
 - [ ] **Step 1: Add explicit app version settings**
