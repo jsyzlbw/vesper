@@ -42,6 +42,8 @@ struct VesperStrings {
     var startConversation: String { text("开始对话", "Start a conversation") }
     var startConversationDescription: String { text("连接 AI Provider 后，通过自然语言记录生活。", "Connect an AI provider, then describe what you need in natural language.") }
     var naturalLanguagePlaceholder: String { text("输入自然语言要求", "Describe what you need") }
+    var naturalLanguage: String { text("自然语言要求", "Natural language request") }
+    var dismissKeyboard: String { text("收起键盘", "Dismiss keyboard") }
     var sendFailed: String { text("发送失败", "Send failed") }
     var ok: String { text("好", "OK") }
     var connectingProvider: String { text("正在连接 AI Provider", "Connecting to AI provider") }
@@ -55,6 +57,8 @@ struct VesperStrings {
     var notConfigured: String { text("尚未配置", "Not configured") }
     var appLanguage: String { text("App 语言", "App Language") }
     var permissions: String { text("权限", "Permissions") }
+    var support: String { text("支持", "Support") }
+    var userGuide: String { text("用户说明书", "User Guide") }
     var defaultPolicy: String { text("默认策略", "Default policy") }
     var confirmBeforeExecution: String { text("执行前确认", "Confirm before execution") }
     var addProvider: String { text("新增 Provider", "Add Provider") }

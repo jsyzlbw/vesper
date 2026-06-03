@@ -42,6 +42,14 @@ struct ProviderSettingsView: View {
                     value: localization.strings.confirmBeforeExecution
                 )
             }
+
+            Section(localization.strings.support) {
+                NavigationLink {
+                    VesperUserGuideView()
+                } label: {
+                    Label(localization.strings.userGuide, systemImage: "book.closed")
+                }
+            }
         }
         .navigationTitle(localization.strings.settings)
         .toolbar {

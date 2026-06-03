@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var statusText: String?
     @State private var errorMessage: String?
     @State private var editorPresentation: ReminderEditorPresentation?
+    @FocusState private var isComposerFocused: Bool
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -55,6 +56,12 @@ struct ChatView: View {
                         }
                         .padding()
                     }
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            isComposerFocused = false
+                        }
+                    )
                     .onChange(of: messages.count) {
                         scrollToLatest(using: proxy)
                     }
@@ -89,21 +96,49 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        VStack(alignment: .leading, spacing: 9) {
             TextField(localization.strings.naturalLanguagePlaceholder, text: $draft, axis: .vertical)
                 .lineLimit(1...5)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(.plain)
+                .focused($isComposerFocused)
                 .disabled(isSending)
 
-            Button(action: send) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
+            HStack {
+                Text(localization.strings.naturalLanguage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: send) {
+                    Image(systemName: "arrow.up")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Color.accentColor)
+                        .clipShape(Circle())
+                }
+                .disabled(trimmedDraft.isEmpty || isSending)
             }
-            .disabled(trimmedDraft.isEmpty || isSending)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color(.separator).opacity(0.35), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.07), radius: 12, y: 5)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(.bar)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(localization.strings.dismissKeyboard) {
+                    isComposerFocused = false
+                }
+            }
+        }
     }
 
     private var visibleMessages: [MessageRecord] {
@@ -120,6 +155,7 @@ struct ChatView: View {
             return
         }
         draft = ""
+        isComposerFocused = false
         Task {
             await streamReply(to: text)
         }
