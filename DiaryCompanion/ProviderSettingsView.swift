@@ -7,7 +7,9 @@ struct ProviderSettingsView: View {
     @Environment(\.vesperLocalization) private var localization
     @Query(sort: \ProviderProfileRecord.displayName)
     private var profiles: [ProviderProfileRecord]
-    @State private var isAddingProfile = false
+    @State private var profileForm: ProviderProfileFormPresentation?
+    @State private var debugLogDocument = DebugLogDocument()
+    @State private var isExportingDebugLog = false
     @State private var errorMessage: String?
     @AppStorage("vesper.appLanguage")
     private var appLanguageRawValue = VesperLanguage.followSystem.rawValue
@@ -20,9 +22,20 @@ struct ProviderSettingsView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(profiles) { profile in
-                        ProviderProfileRow(profile: profile)
+                        Button {
+                            editProfile(profile)
+                        } label: {
+                            ProviderProfileRow(profile: profile)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onDelete(perform: deleteProfiles)
+                }
+
+                Button {
+                    profileForm = .add
+                } label: {
+                    Label(localization.strings.addProvider, systemImage: "plus.circle.fill")
                 }
             }
 
@@ -49,22 +62,34 @@ struct ProviderSettingsView: View {
                 } label: {
                     Label(localization.strings.userGuide, systemImage: "book.closed")
                 }
+                Button {
+                    exportDebugLog()
+                } label: {
+                    Label(localization.strings.exportDebugLog, systemImage: "square.and.arrow.up")
+                }
             }
         }
         .navigationTitle(localization.strings.settings)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(localization.strings.addProvider, systemImage: "plus") {
-                    isAddingProfile = true
-                }
-            }
-        }
-        .sheet(isPresented: $isAddingProfile) {
+        .sheet(item: $profileForm) { presentation in
             NavigationStack {
-                ProviderProfileFormView { profile, apiKey in
+                ProviderProfileFormView(
+                    initialProfile: initialProfile(for: presentation),
+                    initialAPIKey: initialAPIKey(for: presentation),
+                    isEditing: presentation.isEditing
+                ) { profile, apiKey in
                     try ProviderProfileRepository(context: modelContext)
                         .save(profile: profile, apiKey: apiKey)
                 }
+            }
+        }
+        .fileExporter(
+            isPresented: $isExportingDebugLog,
+            document: debugLogDocument,
+            contentType: .json,
+            defaultFilename: "vesper-debug-log-\(Self.debugLogTimestamp()).json"
+        ) { result in
+            if case let .failure(error) = result {
+                errorMessage = error.localizedDescription
             }
         }
         .alert(
@@ -80,6 +105,50 @@ struct ProviderSettingsView: View {
         }
     }
 
+    private func editProfile(_ record: ProviderProfileRecord) {
+        profileForm = .edit(record.id)
+    }
+
+    private func exportDebugLog() {
+        do {
+            debugLogDocument = try VesperDebugLogExporter(context: modelContext)
+                .makeDocument()
+            isExportingDebugLog = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func initialProfile(
+        for presentation: ProviderProfileFormPresentation
+    ) -> ProviderProfile? {
+        guard case let .edit(id) = presentation,
+              let record = profiles.first(where: { $0.id == id }),
+              let preset = ProviderPreset.allCases.first(where: { $0.id == record.presetID }),
+              let baseURL = URL(string: record.baseURL)
+        else {
+            return nil
+        }
+        return ProviderProfile(
+            id: record.id,
+            displayName: record.displayName,
+            preset: preset,
+            baseURL: baseURL,
+            modelName: record.modelName,
+            isEnabled: record.isEnabled
+        )
+    }
+
+    private func initialAPIKey(
+        for presentation: ProviderProfileFormPresentation
+    ) -> String? {
+        guard case let .edit(id) = presentation else {
+            return nil
+        }
+        return try? ProviderProfileRepository(context: modelContext)
+            .loadAPIKey(profileID: id)
+    }
+
     private func deleteProfiles(at offsets: IndexSet) {
         do {
             let repository = ProviderProfileRepository(context: modelContext)
@@ -89,6 +158,33 @@ struct ProviderSettingsView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private static func debugLogTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: Date())
+    }
+}
+
+private enum ProviderProfileFormPresentation: Identifiable {
+    case add
+    case edit(UUID)
+
+    var id: String {
+        switch self {
+        case .add:
+            "add"
+        case let .edit(id):
+            "edit-\(id.uuidString)"
+        }
+    }
+
+    var isEditing: Bool {
+        if case .edit = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -106,7 +202,12 @@ private struct ProviderProfileRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
+        .contentShape(Rectangle())
     }
 
     private var presetDisplayName: String {
@@ -129,7 +230,27 @@ private struct ProviderProfileFormView: View {
     @State private var connectionMessage: String?
     @State private var isTestingConnection = false
 
+    let existingProfileID: UUID?
+    let isEditing: Bool
     let onSave: (ProviderProfile, String) throws -> Void
+
+    init(
+        initialProfile: ProviderProfile? = nil,
+        initialAPIKey: String? = nil,
+        isEditing: Bool = false,
+        onSave: @escaping (ProviderProfile, String) throws -> Void
+    ) {
+        let profile = initialProfile
+        _selectedPreset = State(initialValue: profile?.preset ?? .openAI)
+        _displayName = State(initialValue: profile?.displayName ?? ProviderPreset.openAI.displayName)
+        _baseURL = State(initialValue: profile?.baseURL.absoluteString ?? ProviderPreset.openAI.defaultBaseURL?.absoluteString ?? "")
+        _modelName = State(initialValue: profile?.modelName ?? "")
+        _apiKey = State(initialValue: initialAPIKey ?? "")
+        _isEnabled = State(initialValue: profile?.isEnabled ?? true)
+        existingProfileID = profile?.id
+        self.isEditing = isEditing
+        self.onSave = onSave
+    }
 
     var body: some View {
         Form {
@@ -186,7 +307,7 @@ private struct ProviderProfileFormView: View {
                 }
             }
         }
-        .navigationTitle(localization.strings.addProvider)
+        .navigationTitle(isEditing ? localization.strings.editProvider : localization.strings.addProvider)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -208,7 +329,7 @@ private struct ProviderProfileFormView: View {
     private func save() {
         do {
             let profile = try makeProfile()
-            let key = try required(apiKey, field: "API Key")
+            let key = try resolvedAPIKey()
             try onSave(profile, key)
             dismiss()
         } catch {
@@ -222,7 +343,7 @@ private struct ProviderProfileFormView: View {
         }
         do {
             let profile = try makeProfile()
-            let key = try required(apiKey, field: "API Key")
+            let key = try resolvedAPIKey()
             validationMessage = nil
             connectionMessage = nil
             isTestingConnection = true
@@ -290,6 +411,7 @@ private struct ProviderProfileFormView: View {
             _ = try required(apiKey, field: "API Key")
         }
         return ProviderProfile(
+            id: existingProfileID ?? UUID(),
             displayName: name,
             preset: selectedPreset,
             baseURL: url,
@@ -319,6 +441,10 @@ private struct ProviderProfileFormView: View {
             )
         }
         return url
+    }
+
+    private func resolvedAPIKey() throws -> String {
+        try required(apiKey, field: "API Key")
     }
 }
 

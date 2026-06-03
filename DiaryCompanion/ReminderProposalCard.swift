@@ -141,6 +141,8 @@ struct ReminderProposalCard: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
         }
@@ -205,9 +207,16 @@ struct ReminderProposalCard: View {
             }
             .font(.subheadline.weight(.medium))
         case .cancelled:
-            Label(localization.strings.cancelled, systemImage: "xmark.circle")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            HStack {
+                Label(localization.strings.cancelled, systemImage: "xmark.circle")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(localization.strings.restoreReminder) {
+                    action(.recover)
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.subheadline.weight(.medium))
         case nil:
             Label(localization.strings.invalidReminderStatus, systemImage: "exclamationmark.triangle")
                 .font(.subheadline)

@@ -24,6 +24,7 @@ public protocol ReminderPersistence: AnyObject {
     func resetReminderExecution(id: UUID) throws
     func updateReminderProposal(id: UUID, proposal: ReminderProposal) throws
     func cancelReminder(id: UUID) throws
+    func deleteReminder(id: UUID) throws
 }
 
 @MainActor
@@ -389,6 +390,11 @@ public final class ReminderSchedulingCoordinator {
         try repository.updateReminderProposal(id: reminderID, proposal: proposal)
     }
 
+    public func editAndConfirm(reminderID: UUID, proposal: ReminderProposal) async throws {
+        try edit(reminderID: reminderID, proposal: proposal)
+        try await confirm(reminderID: reminderID)
+    }
+
     public func cancel(reminderID: UUID) throws {
         let record = try repository.reminder(id: reminderID)
         try rejectExecuting(record)
@@ -396,6 +402,14 @@ public final class ReminderSchedulingCoordinator {
         try repository.resetReminderExecution(id: reminderID)
         try cleanupJournal.remove(reminderID: reminderID)
         try repository.cancelReminder(id: reminderID)
+    }
+
+    public func delete(reminderID: UUID) throws {
+        let record = try repository.reminder(id: reminderID)
+        try rejectExecuting(record)
+        try removeOutputs(for: record, reminderID: reminderID)
+        try cleanupJournal.remove(reminderID: reminderID)
+        try repository.deleteReminder(id: reminderID)
     }
 
     public func recoverInterruptedExecution(reminderID: UUID) throws {

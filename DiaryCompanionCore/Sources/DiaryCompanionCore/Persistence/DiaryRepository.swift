@@ -254,6 +254,28 @@ public final class DiaryRepository: ReminderPersistence {
         try context.save()
     }
 
+    public func deleteReminder(id: UUID) throws {
+        let record = try reminder(id: id)
+        context.delete(record)
+        try context.save()
+    }
+
+    public func restoreCancelledReminderProposal(id: UUID) throws {
+        let record = try reminder(id: id)
+        guard record.status == ReminderProposalStatus.cancelled.rawValue else {
+            throw DiaryRepositoryError.invalidReminderStatus(record.status)
+        }
+        guard !record.hasExternalResourceIdentifiers else {
+            throw DiaryRepositoryError.reminderRequiresExecutionReset(id)
+        }
+        record.status = ReminderProposalStatus.pendingConfirmation.rawValue
+        record.notificationResult = ReminderExecutionResult.notRequested.rawValue
+        record.alarmResult = ReminderExecutionResult.notRequested.rawValue
+        record.calendarResult = ReminderExecutionResult.notRequested.rawValue
+        record.isScheduled = false
+        try context.save()
+    }
+
     public func fetchAuditLogs() throws -> [ToolAuditRecord] {
         var descriptor = FetchDescriptor<ToolAuditRecord>()
         descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]

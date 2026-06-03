@@ -221,6 +221,28 @@ import UserNotifications
 }
 
 @MainActor
+@Test func editAndConfirmCleansUpOutputsSavesProposalAndReschedules() async throws {
+    let fixture = try CoordinatorFixture(proposal: makeProposal(alarmEnabled: true))
+    let record = try fixture.makeRecord()
+    try await fixture.coordinator.confirm(reminderID: record.id)
+    let originalNotificationIDs = fixture.expectedNotificationIDs
+    let originalAlarmIDs = fixture.expectedAlarmIDs
+    let edited = makeProposal(title: "Edited from timeline")
+
+    try await fixture.coordinator.editAndConfirm(reminderID: record.id, proposal: edited)
+
+    #expect(fixture.calendar.removedReferences == [
+        CalendarEventReference(eventIdentifier: "event-1", externalIdentifier: "external-1")
+    ])
+    #expect(fixture.notifications.removedIdentifierBatches == [originalNotificationIDs])
+    #expect(fixture.alarms.removedIdentifierBatches == [originalAlarmIDs])
+    #expect(record.status == ReminderProposalStatus.scheduled.rawValue)
+    #expect(try fixture.repository.reminderProposal(from: record) == edited)
+    #expect(record.notificationResult == ReminderExecutionResult.scheduled.rawValue)
+    #expect(record.calendarResult == ReminderExecutionResult.created.rawValue)
+}
+
+@MainActor
 @Test func editRejectsInvalidProposalBeforeCleaningUpExistingOutputs() async throws {
     let fixture = try CoordinatorFixture()
     let record = try fixture.makeRecord()
@@ -250,6 +272,26 @@ import UserNotifications
     #expect(fixture.notifications.removedIdentifierBatches == [fixture.expectedNotificationIDs])
     #expect(fixture.alarms.removedIdentifierBatches == [fixture.expectedAlarmIDs])
     #expect(record.status == ReminderProposalStatus.cancelled.rawValue)
+}
+
+@MainActor
+@Test func deleteCleansUpOutputsAndRemovesReminderRecord() async throws {
+    let fixture = try CoordinatorFixture(proposal: makeProposal(alarmEnabled: true))
+    let record = try fixture.makeRecord()
+    try await fixture.coordinator.confirm(reminderID: record.id)
+    let originalNotificationIDs = fixture.expectedNotificationIDs
+    let originalAlarmIDs = fixture.expectedAlarmIDs
+
+    try fixture.coordinator.delete(reminderID: record.id)
+
+    #expect(fixture.calendar.removedReferences == [
+        CalendarEventReference(eventIdentifier: "event-1", externalIdentifier: "external-1")
+    ])
+    #expect(fixture.notifications.removedIdentifierBatches == [originalNotificationIDs])
+    #expect(fixture.alarms.removedIdentifierBatches == [originalAlarmIDs])
+    #expect(throws: DiaryRepositoryError.reminderNotFound(record.id)) {
+        try fixture.repository.reminder(id: record.id)
+    }
 }
 
 @MainActor
@@ -991,6 +1033,10 @@ private final class FailingReminderPersistence: ReminderPersistence {
 
     func cancelReminder(id: UUID) throws {
         try repository.cancelReminder(id: id)
+    }
+
+    func deleteReminder(id: UUID) throws {
+        try repository.deleteReminder(id: id)
     }
 }
 

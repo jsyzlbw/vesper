@@ -1,6 +1,7 @@
 import DiaryCompanionCore
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct ChatView: View {
     @Environment(\.modelContext) private var modelContext
@@ -424,7 +425,12 @@ struct ChatView: View {
                 case .cancel:
                     try coordinator.cancel(reminderID: reminder.id)
                 case .recover:
-                    try coordinator.recoverInterruptedExecution(reminderID: reminder.id)
+                    if reminder.status == ReminderProposalStatus.cancelled.rawValue {
+                        try DiaryRepository(context: modelContext)
+                            .restoreCancelledReminderProposal(id: reminder.id)
+                    } else {
+                        try coordinator.recoverInterruptedExecution(reminderID: reminder.id)
+                    }
                 }
             } catch {
                 errorMessage = localizedMessage(for: error)
@@ -486,6 +492,7 @@ private struct ReminderEditorPresentation: Identifiable {
 }
 
 private struct ChatBubble: View {
+    @Environment(\.vesperLocalization) private var localization
     let message: MessageRecord
 
     var body: some View {
@@ -494,11 +501,17 @@ private struct ChatBubble: View {
                 Spacer(minLength: 48)
             }
             Text(message.content)
+                .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(isUser ? Color.accentColor : Color(.secondarySystemBackground))
                 .foregroundStyle(isUser ? .white : .primary)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                .contextMenu {
+                    Button(localization.strings.copy) {
+                        UIPasteboard.general.string = message.content
+                    }
+                }
             if !isUser {
                 Spacer(minLength: 48)
             }

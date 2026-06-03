@@ -19,6 +19,7 @@
 		AA000000000000000000000A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* InfoPlist.strings */; };
 		AA000000000000000000000B /* AlarmKitAlarmClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001C /* AlarmKitAlarmClient.swift */; };
 		AA000000000000000000000C /* VesperUserGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001E /* VesperUserGuideView.swift */; };
+		AA000000000000000000000D /* VesperDebugLogExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001F /* VesperDebugLogExporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		AA000000000000000000001C /* AlarmKitAlarmClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmKitAlarmClient.swift; sourceTree = "<group>"; };
 		AA000000000000000000001D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA000000000000000000001E /* VesperUserGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VesperUserGuideView.swift; sourceTree = "<group>"; };
+		AA000000000000000000001F /* VesperDebugLogExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VesperDebugLogExporter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -72,6 +74,7 @@
 				AA000000000000000000001C /* AlarmKitAlarmClient.swift */,
 				AA000000000000000000001D /* Info.plist */,
 				AA000000000000000000001E /* VesperUserGuideView.swift */,
+				AA000000000000000000001F /* VesperDebugLogExporter.swift */,
 				AA000000000000000000001B /* InfoPlist.strings */,
 			);
 			path = DiaryCompanion;
@@ -171,6 +174,7 @@
 				AA0000000000000000000009 /* VesperLocalization.swift in Sources */,
 				AA000000000000000000000B /* AlarmKitAlarmClient.swift in Sources */,
 				AA000000000000000000000C /* VesperUserGuideView.swift in Sources */,
+				AA000000000000000000000D /* VesperDebugLogExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

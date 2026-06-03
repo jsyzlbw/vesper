@@ -36,14 +36,16 @@ struct VesperStrings {
     var settings: String { text("设置", "Settings") }
     var audit: String { text("审计", "Audit") }
     var noAuditRecords: String { text("暂无审计记录", "No audit records") }
-    var auditDescription: String { text("AI 的工具调用记录会显示在这里。", "AI tool calls will appear here.") }
+    var auditDescription: String { text("AI 的工具调用记录会显示在这里，用来核对它是否真的写入了日记、任务、提醒或日历。", "AI tool calls appear here so you can verify whether it really wrote diaries, tasks, reminders, or calendar events.") }
     var noTimelineRecords: String { text("暂无记录", "No records yet") }
-    var timelineDescription: String { text("AI 保存的日记、任务和总结会出现在这里。", "Diaries, tasks, and summaries saved by AI will appear here.") }
+    var timelineDescription: String { text("AI 保存的日记、任务、提醒、闹钟和总结会出现在这里。", "Diaries, tasks, reminders, alarms, and summaries saved by AI will appear here.") }
     var startConversation: String { text("开始对话", "Start a conversation") }
     var startConversationDescription: String { text("连接 AI Provider 后，通过自然语言记录生活。", "Connect an AI provider, then describe what you need in natural language.") }
     var naturalLanguagePlaceholder: String { text("输入自然语言要求", "Describe what you need") }
     var naturalLanguage: String { text("自然语言要求", "Natural language request") }
     var dismissKeyboard: String { text("收起键盘", "Dismiss keyboard") }
+    var copy: String { text("复制", "Copy") }
+    var delete: String { text("删除", "Delete") }
     var sendFailed: String { text("发送失败", "Send failed") }
     var ok: String { text("好", "OK") }
     var connectingProvider: String { text("正在连接 AI Provider", "Connecting to AI provider") }
@@ -59,9 +61,11 @@ struct VesperStrings {
     var permissions: String { text("权限", "Permissions") }
     var support: String { text("支持", "Support") }
     var userGuide: String { text("用户说明书", "User Guide") }
+    var exportDebugLog: String { text("导出调试日志", "Export debug log") }
     var defaultPolicy: String { text("默认策略", "Default policy") }
     var confirmBeforeExecution: String { text("执行前确认", "Confirm before execution") }
     var addProvider: String { text("新增 Provider", "Add Provider") }
+    var editProvider: String { text("编辑 Provider", "Edit Provider") }
     var operationFailed: String { text("操作失败", "Operation failed") }
     var provider: String { "Provider" }
     var platform: String { text("平台", "Platform") }
@@ -111,6 +115,7 @@ struct VesperStrings {
     var waitingForAutomaticPlacement: String { text("正在等待自动排期", "Waiting for automatic scheduling") }
     var interruptedCreation: String { text("创建被中断，可恢复后重试", "Creation was interrupted. Recover to retry.") }
     var recover: String { text("恢复", "Recover") }
+    var restoreReminder: String { text("恢复卡片", "Restore card") }
     var created: String { text("已创建", "Created") }
     var cancelReminder: String { text("取消提醒", "Cancel reminder") }
     var cancelled: String { text("已取消", "Cancelled") }
@@ -161,5 +166,48 @@ struct VesperStrings {
         return language == .simplifiedChinese
             ? chinese[weekday.rawValue - 1]
             : english[weekday.rawValue - 1]
+    }
+
+    var remindersAndAlarms: String { text("提醒与闹钟", "Reminders & alarms") }
+    var timelineCalendar: String { text("时间线日历", "Timeline calendar") }
+    var noRecordsForSelectedDate: String { text("这一天暂无记录", "No records on this day") }
+    var diaryAndTasks: String { text("日记与任务", "Diaries & tasks") }
+    var summaries: String { text("总结", "Summaries") }
+    var pendingConfirmation: String { text("待确认", "Pending") }
+    var executing: String { text("执行中", "Executing") }
+    var scheduled: String { text("已安排", "Scheduled") }
+    var notificationOutput: String { text("通知", "Notification") }
+    var alarmOutput: String { text("闹钟", "Alarm") }
+    var calendarOutput: String { text("日历", "Calendar") }
+    var noDueDate: String { text("无截止时间", "No due date") }
+    var completed: String { text("已完成", "Completed") }
+    var open: String { text("未完成", "Open") }
+    var decision: String { text("权限决策", "Decision") }
+    var result: String { text("结果", "Result") }
+    var parameters: String { text("参数", "Parameters") }
+    var notRequested: String { text("未请求", "Not requested") }
+    var pending: String { text("等待中", "Pending") }
+    var permissionDenied: String { text("权限被拒绝", "Permission denied") }
+    var failed: String { text("失败", "Failed") }
+    func statusLabel(_ status: ReminderProposalStatus) -> String {
+        switch status {
+        case .pendingConfirmation: pendingConfirmation
+        case .executing: executing
+        case .scheduled: scheduled
+        case .cancelled: cancelled
+        }
+    }
+    func executionResultLabel(_ rawValue: String) -> String {
+        guard let result = ReminderExecutionResult(rawValue: rawValue) else {
+            return rawValue
+        }
+        return switch result {
+        case .notRequested: notRequested
+        case .pending: pending
+        case .scheduled: scheduled
+        case .created: created
+        case .permissionDenied: permissionDenied
+        case .failed: failed
+        }
     }
 }

@@ -271,6 +271,42 @@ import Testing
 }
 
 @MainActor
+@Test func restoringCancelledReminderProposalReturnsToPendingConfirmation() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+    try repository.cancelReminder(id: record.id)
+
+    try repository.restoreCancelledReminderProposal(id: record.id)
+
+    let fetched = try #require(repository.fetchReminders().first)
+    #expect(fetched.status == ReminderProposalStatus.pendingConfirmation.rawValue)
+    #expect(fetched.isScheduled == false)
+    #expect(fetched.notificationResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(fetched.alarmResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(fetched.calendarResult == ReminderExecutionResult.notRequested.rawValue)
+    #expect(fetched.notificationIdentifiers.isEmpty)
+    #expect(fetched.alarmIdentifiers.isEmpty)
+    #expect(fetched.calendarEventIdentifier == nil)
+    #expect(fetched.calendarExternalIdentifier == nil)
+}
+
+@MainActor
+@Test func restoringNonCancelledReminderProposalThrowsInvalidStatus() throws {
+    let repository = try makeReminderRepository()
+    let record = try repository.createReminderProposal(
+        makeFindFreeTimeProposal(),
+        sourceMessageID: nil
+    )
+
+    #expect(throws: DiaryRepositoryError.invalidReminderStatus(record.status)) {
+        try repository.restoreCancelledReminderProposal(id: record.id)
+    }
+}
+
+@MainActor
 @Test func resettingReminderExecutionClearsPersistedResourceState() throws {
     let repository = try makeReminderRepository()
     let record = try repository.createReminderProposal(
