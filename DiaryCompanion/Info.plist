@@ -26,6 +26,8 @@
 	<string>$(INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription)</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>$(INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>$(INFOPLIST_KEY_NSHealthShareUsageDescription)</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>

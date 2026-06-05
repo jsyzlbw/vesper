@@ -5,11 +5,11 @@
 
 ## 1. 概述
 
-将现有基于 Telegram、cc-connect、Claude Code 和 Mac 脚本的个人日记原型，逐步迁移为一个 mobile-first 的原生 iPhone App。
+将旧的聊天机器人、cc-connect、Claude Code 和 Mac 脚本个人日记原型，迁移为一个 mobile-first 的原生 iPhone App。
 
 App 独立运行，不依赖常驻 Mac 服务。用户主要通过自然语言与 AI 对话，由 AI 调用结构化工具完成日记、任务、提醒、饮食、体重、用药和每日总结等操作。
 
-Codex 负责项目开发、测试和维护，不作为 App 运行时。Telegram 在迁移期保留为备用入口，待 iPhone App 稳定后停用。
+Codex 负责项目开发、测试和维护，不作为 App 运行时。旧聊天机器人入口已归档，不再作为运行路径维护。
 
 ## 2. 产品目标
 
@@ -324,13 +324,12 @@ sequenceDiagram
 - 在 iPhone 模拟器执行构建、安装、启动和 UI 回归。
 - 在真机补测 CloudKit、Keychain 和本地通知。
 - 设计旧 Markdown 日记导入流程。
-- App 稳定后停用 cc-connect cron 和 Telegram bot。
+- App 稳定后停用并归档 cc-connect cron 和旧聊天机器人入口。
 
-## 12. Telegram 迁移策略
+## 12. 旧聊天机器人迁移策略
 
-- 迁移初期保留现有 Telegram 服务作为备用入口，不再扩展功能。
+- 旧聊天机器人服务已经归档，不再运行，也不再扩展功能。
 - iPhone App 稳定后，将旧 Markdown 日记导入 App。
 - 对比导入后的数据和原 Markdown 文件，确认记录完整。
-- 数据核对完成后停用 cc-connect cron 和 Telegram bot。
+- 数据核对完成后保留旧脚本和 Markdown 文件为只读归档。
 - 原脚本和 Markdown 文件归档，不直接删除。
-

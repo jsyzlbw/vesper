@@ -97,31 +97,27 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        HStack(alignment: .bottom, spacing: 10) {
             TextField(localization.strings.naturalLanguagePlaceholder, text: $draft, axis: .vertical)
                 .lineLimit(1...5)
                 .textFieldStyle(.plain)
                 .focused($isComposerFocused)
                 .disabled(isSending)
+                .padding(.vertical, 9)
 
-            HStack {
-                Text(localization.strings.naturalLanguage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: send) {
-                    Image(systemName: "arrow.up")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(Color.accentColor)
-                        .clipShape(Circle())
-                }
-                .disabled(trimmedDraft.isEmpty || isSending)
+            Button(action: send) {
+                Image(systemName: "arrow.up")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(trimmedDraft.isEmpty || isSending ? Color.secondary : Color.accentColor)
+                    .clipShape(Circle())
             }
+            .disabled(trimmedDraft.isEmpty || isSending)
+            .padding(.bottom, 1)
         }
         .padding(.horizontal, 15)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
@@ -130,7 +126,8 @@ struct ChatView: View {
         }
         .shadow(color: .black.opacity(0.07), radius: 12, y: 5)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
         .background(.bar)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {

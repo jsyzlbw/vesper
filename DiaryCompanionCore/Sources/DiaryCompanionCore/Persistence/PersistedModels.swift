@@ -288,6 +288,151 @@ import SwiftData
     }
 }
 
+@Model public final class JournalSettingsRecord {
+    @Attribute(.unique) public var id: UUID
+    public var morningHour: Int
+    public var morningMinute: Int
+    public var eveningHour: Int
+    public var eveningMinute: Int
+    public var isMorningPromptEnabled: Bool
+    public var isEveningPromptEnabled: Bool
+    public var isCalendarImportEnabled: Bool
+    public var isHealthImportEnabled: Bool
+    public var lastMorningPromptDate: Date?
+    public var lastEveningPromptDate: Date?
+    public var lastWeeklySummaryDate: Date?
+    public var updatedAt: Date
+
+    public init(
+        id: UUID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!,
+        morningHour: Int = 8,
+        morningMinute: Int = 0,
+        eveningHour: Int = 21,
+        eveningMinute: Int = 30,
+        isMorningPromptEnabled: Bool = true,
+        isEveningPromptEnabled: Bool = true,
+        isCalendarImportEnabled: Bool = true,
+        isHealthImportEnabled: Bool = true,
+        lastMorningPromptDate: Date? = nil,
+        lastEveningPromptDate: Date? = nil,
+        lastWeeklySummaryDate: Date? = nil,
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.morningHour = morningHour
+        self.morningMinute = morningMinute
+        self.eveningHour = eveningHour
+        self.eveningMinute = eveningMinute
+        self.isMorningPromptEnabled = isMorningPromptEnabled
+        self.isEveningPromptEnabled = isEveningPromptEnabled
+        self.isCalendarImportEnabled = isCalendarImportEnabled
+        self.isHealthImportEnabled = isHealthImportEnabled
+        self.lastMorningPromptDate = lastMorningPromptDate
+        self.lastEveningPromptDate = lastEveningPromptDate
+        self.lastWeeklySummaryDate = lastWeeklySummaryDate
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model public final class JournalRecord {
+    @Attribute(.unique) public var id: UUID
+    public var kind: String
+    public var date: Date
+    public var title: String
+    public var body: String
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        kind: String,
+        date: Date,
+        title: String,
+        body: String,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.kind = kind
+        self.date = date
+        self.title = title
+        self.body = body
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+@Model public final class CalendarEventSnapshotRecord {
+    @Attribute(.unique) public var id: UUID
+    public var eventIdentifier: String
+    public var externalIdentifier: String?
+    public var title: String
+    public var notes: String
+    public var startDate: Date
+    public var endDate: Date
+    public var calendarTitle: String
+    public var isAllDay: Bool
+    public var lastSeenAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        eventIdentifier: String,
+        externalIdentifier: String? = nil,
+        title: String,
+        notes: String = "",
+        startDate: Date,
+        endDate: Date,
+        calendarTitle: String,
+        isAllDay: Bool,
+        lastSeenAt: Date = Date()
+    ) {
+        self.id = id
+        self.eventIdentifier = eventIdentifier
+        self.externalIdentifier = externalIdentifier
+        self.title = title
+        self.notes = notes
+        self.startDate = startDate
+        self.endDate = endDate
+        self.calendarTitle = calendarTitle
+        self.isAllDay = isAllDay
+        self.lastSeenAt = lastSeenAt
+    }
+}
+
+@Model public final class HealthDailySummaryRecord {
+    @Attribute(.unique) public var id: UUID
+    public var date: Date
+    public var stepCount: Double
+    public var activeEnergyKilocalories: Double
+    public var exerciseMinutes: Double
+    public var sleepMinutes: Double
+    public var sleepInBedMinutes: Double
+    public var sourceDescription: String
+    public var updatedAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        date: Date,
+        stepCount: Double = 0,
+        activeEnergyKilocalories: Double = 0,
+        exerciseMinutes: Double = 0,
+        sleepMinutes: Double = 0,
+        sleepInBedMinutes: Double = 0,
+        sourceDescription: String = "",
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.date = date
+        self.stepCount = stepCount
+        self.activeEnergyKilocalories = activeEnergyKilocalories
+        self.exerciseMinutes = exerciseMinutes
+        self.sleepMinutes = sleepMinutes
+        self.sleepInBedMinutes = sleepInBedMinutes
+        self.sourceDescription = sourceDescription
+        self.updatedAt = updatedAt
+    }
+}
+
 @Model public final class ToolAuditRecord {
     @Attribute(.unique) public var id: UUID
     public var toolName: String
@@ -350,6 +495,10 @@ public enum DiarySchema {
             MealRecord.self,
             MedicationRecord.self,
             DailySummaryRecord.self,
+            JournalSettingsRecord.self,
+            JournalRecord.self,
+            CalendarEventSnapshotRecord.self,
+            HealthDailySummaryRecord.self,
             ToolAuditRecord.self,
             ProviderProfileRecord.self,
         ]

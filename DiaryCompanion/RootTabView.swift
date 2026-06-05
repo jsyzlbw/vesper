@@ -33,6 +33,7 @@ struct RootTabView: View {
         }
         .task {
             await replenishReminderOutputs()
+            await refreshJournalAutomation()
         }
         .onChange(of: scenePhase) {
             guard scenePhase == .active else {
@@ -40,6 +41,7 @@ struct RootTabView: View {
             }
             Task {
                 await replenishReminderOutputs()
+                await refreshJournalAutomation()
             }
         }
     }
@@ -54,6 +56,14 @@ struct RootTabView: View {
             repository: DiaryRepository(context: modelContext),
             alarmClient: makeAlarmClient()
         ).replenish()
+    }
+
+    @MainActor
+    private func refreshJournalAutomation() async {
+        await JournalAutomationService(
+            context: modelContext,
+            localization: localization
+        ).refresh()
     }
 }
 
@@ -71,9 +81,21 @@ private struct TimelineView: View {
     private var tasks: [TaskRecord]
     @Query(sort: \DailySummaryRecord.date, order: .reverse)
     private var summaries: [DailySummaryRecord]
+    @Query(sort: \JournalRecord.date, order: .reverse)
+    private var journals: [JournalRecord]
+    @Query(sort: \CalendarEventSnapshotRecord.startDate)
+    private var calendarEvents: [CalendarEventSnapshotRecord]
+    @Query(sort: \HealthDailySummaryRecord.date, order: .reverse)
+    private var healthSummaries: [HealthDailySummaryRecord]
 
     var body: some View {
-        if entries.isEmpty, reminders.isEmpty, tasks.isEmpty, summaries.isEmpty {
+        if entries.isEmpty,
+           reminders.isEmpty,
+           tasks.isEmpty,
+           summaries.isEmpty,
+           journals.isEmpty,
+           calendarEvents.isEmpty,
+           healthSummaries.isEmpty {
             ContentUnavailableView(
                 localization.strings.noTimelineRecords,
                 systemImage: "clock.arrow.circlepath",
@@ -94,7 +116,10 @@ private struct TimelineView: View {
                 if dayReminders.isEmpty,
                    dayEntries.isEmpty,
                    dayTasks.isEmpty,
-                   daySummaries.isEmpty {
+                   daySummaries.isEmpty,
+                   dayJournals.isEmpty,
+                   dayCalendarEvents.isEmpty,
+                   dayHealthSummaries.isEmpty {
                     ContentUnavailableView(
                         localization.strings.noRecordsForSelectedDate,
                         systemImage: "calendar",
@@ -104,6 +129,30 @@ private struct TimelineView: View {
                         ))
                     )
                     .listRowBackground(Color.clear)
+                }
+
+                if !dayJournals.isEmpty {
+                    Section(localization.strings.journal) {
+                        ForEach(dayJournals) { journal in
+                            JournalTimelineCard(journal: journal)
+                        }
+                    }
+                }
+
+                if !dayCalendarEvents.isEmpty {
+                    Section(localization.strings.calendarEvents) {
+                        ForEach(dayCalendarEvents) { event in
+                            CalendarEventTimelineRow(event: event)
+                        }
+                    }
+                }
+
+                if !dayHealthSummaries.isEmpty {
+                    Section(localization.strings.healthSnapshotHeader) {
+                        ForEach(dayHealthSummaries) { summary in
+                            HealthTimelineRow(summary: summary)
+                        }
+                    }
                 }
 
                 if !dayReminders.isEmpty {
@@ -204,6 +253,22 @@ private struct TimelineView: View {
 
     private var daySummaries: [DailySummaryRecord] {
         summaries.filter { isSelectedDay($0.date) }
+    }
+
+    private var dayJournals: [JournalRecord] {
+        journals
+            .filter { isSelectedDay($0.date) }
+            .sorted { $0.date < $1.date }
+    }
+
+    private var dayCalendarEvents: [CalendarEventSnapshotRecord] {
+        calendarEvents
+            .filter { isSelectedDay($0.startDate) }
+            .sorted { $0.startDate < $1.startDate }
+    }
+
+    private var dayHealthSummaries: [HealthDailySummaryRecord] {
+        healthSummaries.filter { isSelectedDay($0.date) }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -436,6 +501,123 @@ private struct ReminderOutputChip: View {
             .padding(.vertical, 4)
             .background(Color(.secondarySystemBackground))
             .clipShape(Capsule())
+    }
+}
+
+private struct JournalTimelineCard: View {
+    @Environment(\.vesperLocalization) private var localization
+    let journal: JournalRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(kindLabel, systemImage: kindIcon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                Spacer()
+                Text(journal.date, style: .time)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(journal.title)
+                .font(.title3.weight(.semibold))
+
+            Text(journal.body)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(0.12),
+                    Color(.secondarySystemGroupedBackground),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    private var kindLabel: String {
+        switch JournalKind(rawValue: journal.kind) {
+        case .morningPlan:
+            localization.strings.morningJournalTitle
+        case .eveningReview:
+            localization.strings.eveningJournalTitle
+        case .weeklySummary:
+            localization.strings.weeklyJournalTitle
+        case nil:
+            localization.strings.journal
+        }
+    }
+
+    private var kindIcon: String {
+        switch JournalKind(rawValue: journal.kind) {
+        case .morningPlan:
+            "sun.max.fill"
+        case .eveningReview:
+            "moon.stars.fill"
+        case .weeklySummary:
+            "sparkles"
+        case nil:
+            "book.closed.fill"
+        }
+    }
+}
+
+private struct CalendarEventTimelineRow: View {
+    @Environment(\.vesperLocalization) private var localization
+    let event: CalendarEventSnapshotRecord
+
+    var body: some View {
+        TimelineTextRow(
+            systemImage: event.isAllDay ? "calendar" : "calendar.badge.clock",
+            title: event.title,
+            subtitle: subtitle
+        )
+    }
+
+    private var subtitle: String {
+        if event.isAllDay {
+            return "\(localization.strings.allDay) · \(event.calendarTitle)"
+        }
+        let start = event.startDate.formatted(
+            Date.FormatStyle(date: .omitted, time: .shortened)
+                .locale(localization.locale)
+        )
+        let end = event.endDate.formatted(
+            Date.FormatStyle(date: .omitted, time: .shortened)
+                .locale(localization.locale)
+        )
+        return "\(start)-\(end) · \(event.calendarTitle)"
+    }
+}
+
+private struct HealthTimelineRow: View {
+    @Environment(\.vesperLocalization) private var localization
+    let summary: HealthDailySummaryRecord
+
+    var body: some View {
+        TimelineTextRow(
+            systemImage: "heart.text.square",
+            title: localization.strings.healthSummaryLine(
+                steps: Int(summary.stepCount.rounded()),
+                energy: Int(summary.activeEnergyKilocalories.rounded()),
+                exerciseMinutes: Int(summary.exerciseMinutes.rounded()),
+                sleepHours: summary.sleepMinutes / 60
+            ),
+            subtitle: summary.sourceDescription.isEmpty
+                ? "HealthKit"
+                : summary.sourceDescription
+        )
     }
 }
 

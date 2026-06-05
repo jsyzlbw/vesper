@@ -84,6 +84,20 @@ struct VesperStrings {
     func required(_ field: String) -> String { text("\(field)不能为空。", "\(field) cannot be empty.") }
     var invalidBaseURL: String { text("请输入有效的 HTTP 或 HTTPS Base URL。", "Enter a valid HTTP or HTTPS Base URL.") }
 
+    var journalAutomation: String { text("日记与周记", "Journal & weekly review") }
+    var morningPromptEnabled: String { text("早晨主动提醒", "Morning prompt") }
+    var eveningPromptEnabled: String { text("晚上总结提醒", "Evening reflection") }
+    var morningPromptTime: String { text("早晨时间", "Morning time") }
+    var eveningPromptTime: String { text("晚上时间", "Evening time") }
+    var importVisibleCalendars: String { text("读取所有可见日历", "Import visible calendars") }
+    var importHealthData: String { text("读取运动与睡眠", "Import activity and sleep") }
+    var journalAutomationFooter: String {
+        text(
+            "Vesper 会用本地通知主动发起对话，并在 App 打开或回到前台时同步日历、运动和睡眠数据。",
+            "Vesper uses local notifications to start the conversation, then syncs calendar, activity, and sleep data when the app opens or returns to foreground."
+        )
+    }
+
     var followSystem: String { text("跟随系统", "Follow System") }
     var simplifiedChinese: String { "简体中文" }
     var english: String { "English" }
@@ -173,6 +187,43 @@ struct VesperStrings {
     var noRecordsForSelectedDate: String { text("这一天暂无记录", "No records on this day") }
     var diaryAndTasks: String { text("日记与任务", "Diaries & tasks") }
     var summaries: String { text("总结", "Summaries") }
+    var journal: String { text("日记", "Journal") }
+    var calendarEvents: String { text("日历事项", "Calendar events") }
+    var morningJournalTitle: String { text("今日晨间简报", "Morning brief") }
+    var eveningJournalTitle: String { text("今晚复盘", "Evening reflection") }
+    var weeklyJournalTitle: String { text("本周回顾", "Weekly review") }
+    var morningJournalNotificationBody: String { text("来看看今天的日程和身体状态。", "Review today's schedule and body snapshot.") }
+    var eveningJournalNotificationBody: String { text("花一分钟总结今天，Vesper 会帮你整理。", "Spend a minute reflecting. Vesper will organize it.") }
+    var todayScheduleHeader: String { text("今日安排", "Today's schedule") }
+    var healthSnapshotHeader: String { text("健康快照", "Health snapshot") }
+    var noCalendarEventsToday: String { text("今天还没有日历事项。", "No calendar events today.") }
+    var noHealthDataYet: String { text("还没有读取到 Health 数据。", "No Health data yet.") }
+    var eveningReviewPrompt: String { text("今晚可以从这几件事开始：今天完成了什么、有什么情绪波动、明天最该推进什么。", "Start with what you finished, what shifted emotionally, and what matters most tomorrow.") }
+    var untitledCalendarEvent: String { text("未命名日程", "Untitled event") }
+    var allDay: String { text("全天", "All-day") }
+    func morningAssistantMessage(_ body: String) -> String {
+        text("早上好。我已经整理了今天的日程和健康快照：\n\n\(body)", "Good morning. I prepared today's schedule and health snapshot:\n\n\(body)")
+    }
+    func eveningAssistantMessage(_ body: String) -> String {
+        text("晚上好。我们来收一下今天吧：\n\n\(body)", "Good evening. Let's gather today:\n\n\(body)")
+    }
+    func healthSummaryLine(
+        steps: Int,
+        energy: Int,
+        exerciseMinutes: Int,
+        sleepHours: Double
+    ) -> String {
+        text(
+            "步数 \(steps)，活动能量 \(energy) 千卡，锻炼 \(exerciseMinutes) 分钟，睡眠 \(String(format: "%.1f", sleepHours)) 小时",
+            "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min exercise, \(String(format: "%.1f", sleepHours)) h sleep"
+        )
+    }
+    func weeklyJournalBody(eventCount: Int, stepCount: Int, sleepHours: Double) -> String {
+        text(
+            "这一周共同步 \(eventCount) 个日历事项，累计约 \(stepCount) 步，记录睡眠 \(String(format: "%.1f", sleepHours)) 小时。可以继续补充：本周最重要的进展、遗憾、关系和下周重点。",
+            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, and \(String(format: "%.1f", sleepHours)) hours of sleep. Add the key progress, regrets, relationships, and next week's focus."
+        )
+    }
     var pendingConfirmation: String { text("待确认", "Pending") }
     var executing: String { text("执行中", "Executing") }
     var scheduled: String { text("已安排", "Scheduled") }

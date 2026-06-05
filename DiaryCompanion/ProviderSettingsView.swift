@@ -7,6 +7,8 @@ struct ProviderSettingsView: View {
     @Environment(\.vesperLocalization) private var localization
     @Query(sort: \ProviderProfileRecord.displayName)
     private var profiles: [ProviderProfileRecord]
+    @Query
+    private var journalSettings: [JournalSettingsRecord]
     @State private var profileForm: ProviderProfileFormPresentation?
     @State private var debugLogDocument = DebugLogDocument()
     @State private var isExportingDebugLog = false
@@ -49,6 +51,43 @@ struct ProviderSettingsView: View {
                 .labelsHidden()
             }
 
+            Section {
+                Toggle(
+                    localization.strings.morningPromptEnabled,
+                    isOn: journalBooleanBinding(\.isMorningPromptEnabled)
+                )
+                DatePicker(
+                    localization.strings.morningPromptTime,
+                    selection: morningTimeBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(!(journalSettings.first?.isMorningPromptEnabled ?? true))
+
+                Toggle(
+                    localization.strings.eveningPromptEnabled,
+                    isOn: journalBooleanBinding(\.isEveningPromptEnabled)
+                )
+                DatePicker(
+                    localization.strings.eveningPromptTime,
+                    selection: eveningTimeBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(!(journalSettings.first?.isEveningPromptEnabled ?? true))
+
+                Toggle(
+                    localization.strings.importVisibleCalendars,
+                    isOn: journalBooleanBinding(\.isCalendarImportEnabled)
+                )
+                Toggle(
+                    localization.strings.importHealthData,
+                    isOn: journalBooleanBinding(\.isHealthImportEnabled)
+                )
+            } header: {
+                Text(localization.strings.journalAutomation)
+            } footer: {
+                Text(localization.strings.journalAutomationFooter)
+            }
+
             Section(localization.strings.permissions) {
                 LabeledContent(
                     localization.strings.defaultPolicy,
@@ -70,6 +109,9 @@ struct ProviderSettingsView: View {
             }
         }
         .navigationTitle(localization.strings.settings)
+        .task {
+            _ = try? DiaryRepository(context: modelContext).journalSettings()
+        }
         .sheet(item: $profileForm) { presentation in
             NavigationStack {
                 ProviderProfileFormView(
@@ -117,6 +159,76 @@ struct ProviderSettingsView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private var morningTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                timeDate(
+                    hour: journalSettings.first?.morningHour ?? 8,
+                    minute: journalSettings.first?.morningMinute ?? 0
+                )
+            },
+            set: { date in
+                saveJournalSetting { settings in
+                    let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                    settings.morningHour = components.hour ?? 8
+                    settings.morningMinute = components.minute ?? 0
+                }
+            }
+        )
+    }
+
+    private var eveningTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                timeDate(
+                    hour: journalSettings.first?.eveningHour ?? 21,
+                    minute: journalSettings.first?.eveningMinute ?? 30
+                )
+            },
+            set: { date in
+                saveJournalSetting { settings in
+                    let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                    settings.eveningHour = components.hour ?? 21
+                    settings.eveningMinute = components.minute ?? 30
+                }
+            }
+        )
+    }
+
+    private func journalBooleanBinding(
+        _ keyPath: ReferenceWritableKeyPath<JournalSettingsRecord, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { journalSettings.first?[keyPath: keyPath] ?? true },
+            set: { value in
+                saveJournalSetting { settings in
+                    settings[keyPath: keyPath] = value
+                }
+            }
+        )
+    }
+
+    private func saveJournalSetting(_ update: @escaping (JournalSettingsRecord) -> Void) {
+        do {
+            try DiaryRepository(context: modelContext).saveJournalSettings(update)
+            Task {
+                await JournalAutomationService(
+                    context: modelContext,
+                    localization: localization
+                ).refresh()
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func timeDate(hour: Int, minute: Int) -> Date {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = hour
+        components.minute = minute
+        return Calendar.current.date(from: components) ?? Date()
     }
 
     private func initialProfile(

@@ -83,6 +83,159 @@ public final class DiaryRepository: ReminderPersistence {
         return try context.fetch(descriptor)
     }
 
+    public func journalSettings() throws -> JournalSettingsRecord {
+        let descriptor = FetchDescriptor<JournalSettingsRecord>()
+        if let existing = try context.fetch(descriptor).first {
+            return existing
+        }
+        let settings = JournalSettingsRecord()
+        context.insert(settings)
+        try context.save()
+        return settings
+    }
+
+    public func saveJournalSettings(_ update: (JournalSettingsRecord) -> Void) throws {
+        let settings = try journalSettings()
+        update(settings)
+        settings.updatedAt = Date()
+        try context.save()
+    }
+
+    @discardableResult
+    public func upsertJournalRecord(
+        kind: String,
+        date: Date,
+        title: String,
+        body: String
+    ) throws -> JournalRecord {
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)
+            ?? date.addingTimeInterval(86_400)
+        let descriptor = FetchDescriptor<JournalRecord>(
+            predicate: #Predicate {
+                $0.kind == kind && $0.date >= startOfDay && $0.date < endOfDay
+            }
+        )
+        if let existing = try context.fetch(descriptor).first {
+            existing.date = date
+            existing.title = title
+            existing.body = body
+            existing.updatedAt = Date()
+            try context.save()
+            return existing
+        }
+        let record = JournalRecord(
+            kind: kind,
+            date: date,
+            title: title,
+            body: body
+        )
+        context.insert(record)
+        try context.save()
+        return record
+    }
+
+    public func fetchJournalRecords() throws -> [JournalRecord] {
+        var descriptor = FetchDescriptor<JournalRecord>()
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        return try context.fetch(descriptor)
+    }
+
+    @discardableResult
+    public func upsertCalendarEventSnapshot(
+        eventIdentifier: String,
+        externalIdentifier: String?,
+        title: String,
+        notes: String,
+        startDate: Date,
+        endDate: Date,
+        calendarTitle: String,
+        isAllDay: Bool
+    ) throws -> CalendarEventSnapshotRecord {
+        let descriptor = FetchDescriptor<CalendarEventSnapshotRecord>(
+            predicate: #Predicate { $0.eventIdentifier == eventIdentifier }
+        )
+        if let existing = try context.fetch(descriptor).first {
+            existing.externalIdentifier = externalIdentifier
+            existing.title = title
+            existing.notes = notes
+            existing.startDate = startDate
+            existing.endDate = endDate
+            existing.calendarTitle = calendarTitle
+            existing.isAllDay = isAllDay
+            existing.lastSeenAt = Date()
+            try context.save()
+            return existing
+        }
+        let record = CalendarEventSnapshotRecord(
+            eventIdentifier: eventIdentifier,
+            externalIdentifier: externalIdentifier,
+            title: title,
+            notes: notes,
+            startDate: startDate,
+            endDate: endDate,
+            calendarTitle: calendarTitle,
+            isAllDay: isAllDay
+        )
+        context.insert(record)
+        try context.save()
+        return record
+    }
+
+    public func fetchCalendarEventSnapshots() throws -> [CalendarEventSnapshotRecord] {
+        var descriptor = FetchDescriptor<CalendarEventSnapshotRecord>()
+        descriptor.sortBy = [SortDescriptor(\.startDate)]
+        return try context.fetch(descriptor)
+    }
+
+    @discardableResult
+    public func upsertHealthDailySummary(
+        date: Date,
+        stepCount: Double,
+        activeEnergyKilocalories: Double,
+        exerciseMinutes: Double,
+        sleepMinutes: Double,
+        sleepInBedMinutes: Double,
+        sourceDescription: String
+    ) throws -> HealthDailySummaryRecord {
+        let startOfDay = Calendar.current.startOfDay(for: date)
+        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)
+            ?? date.addingTimeInterval(86_400)
+        let descriptor = FetchDescriptor<HealthDailySummaryRecord>(
+            predicate: #Predicate { $0.date >= startOfDay && $0.date < endOfDay }
+        )
+        if let existing = try context.fetch(descriptor).first {
+            existing.date = startOfDay
+            existing.stepCount = stepCount
+            existing.activeEnergyKilocalories = activeEnergyKilocalories
+            existing.exerciseMinutes = exerciseMinutes
+            existing.sleepMinutes = sleepMinutes
+            existing.sleepInBedMinutes = sleepInBedMinutes
+            existing.sourceDescription = sourceDescription
+            existing.updatedAt = Date()
+            try context.save()
+            return existing
+        }
+        let record = HealthDailySummaryRecord(
+            date: startOfDay,
+            stepCount: stepCount,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            exerciseMinutes: exerciseMinutes,
+            sleepMinutes: sleepMinutes,
+            sleepInBedMinutes: sleepInBedMinutes,
+            sourceDescription: sourceDescription
+        )
+        context.insert(record)
+        try context.save()
+        return record
+    }
+
+    public func fetchHealthDailySummaries() throws -> [HealthDailySummaryRecord] {
+        var descriptor = FetchDescriptor<HealthDailySummaryRecord>()
+        descriptor.sortBy = [SortDescriptor(\.date, order: .reverse)]
+        return try context.fetch(descriptor)
+    }
+
     @discardableResult
     public func createReminderProposal(
         _ proposal: ReminderProposal,

@@ -15,7 +15,7 @@
 
 Vesper is a personal assistant that lives on iPhone. You speak to it in natural language, and it turns your intent into editable, explicit actions: reminders, notifications, real alarms, calendar events, diary entries, tasks, and debugging logs.
 
-The long-term goal is a private, native companion app that can replace lightweight chat-bot workflows without requiring a Mac service to stay online.
+The long-term goal is a private, native companion app that can archive older script-based workflows without requiring a Mac service to stay online.
 
 ## Highlights
 

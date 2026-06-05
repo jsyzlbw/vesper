@@ -114,6 +114,61 @@ struct VesperDebugLogExporter {
                     createdAt: $0.createdAt
                 )
             },
+            journalSettings: try fetch(JournalSettingsRecord.self).map {
+                .init(
+                    id: $0.id,
+                    morningHour: $0.morningHour,
+                    morningMinute: $0.morningMinute,
+                    eveningHour: $0.eveningHour,
+                    eveningMinute: $0.eveningMinute,
+                    isMorningPromptEnabled: $0.isMorningPromptEnabled,
+                    isEveningPromptEnabled: $0.isEveningPromptEnabled,
+                    isCalendarImportEnabled: $0.isCalendarImportEnabled,
+                    isHealthImportEnabled: $0.isHealthImportEnabled,
+                    lastMorningPromptDate: $0.lastMorningPromptDate,
+                    lastEveningPromptDate: $0.lastEveningPromptDate,
+                    lastWeeklySummaryDate: $0.lastWeeklySummaryDate,
+                    updatedAt: $0.updatedAt
+                )
+            },
+            journals: try fetch(JournalRecord.self).map {
+                .init(
+                    id: $0.id,
+                    kind: $0.kind,
+                    date: $0.date,
+                    title: $0.title,
+                    body: $0.body,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt
+                )
+            },
+            calendarEventSnapshots: try fetch(CalendarEventSnapshotRecord.self).map {
+                .init(
+                    id: $0.id,
+                    eventIdentifier: $0.eventIdentifier,
+                    externalIdentifier: $0.externalIdentifier,
+                    title: $0.title,
+                    notes: $0.notes,
+                    startDate: $0.startDate,
+                    endDate: $0.endDate,
+                    calendarTitle: $0.calendarTitle,
+                    isAllDay: $0.isAllDay,
+                    lastSeenAt: $0.lastSeenAt
+                )
+            },
+            healthDailySummaries: try fetch(HealthDailySummaryRecord.self).map {
+                .init(
+                    id: $0.id,
+                    date: $0.date,
+                    stepCount: $0.stepCount,
+                    activeEnergyKilocalories: $0.activeEnergyKilocalories,
+                    exerciseMinutes: $0.exerciseMinutes,
+                    sleepMinutes: $0.sleepMinutes,
+                    sleepInBedMinutes: $0.sleepInBedMinutes,
+                    sourceDescription: $0.sourceDescription,
+                    updatedAt: $0.updatedAt
+                )
+            },
             toolAuditLogs: try fetch(ToolAuditRecord.self).map {
                 .init(
                     id: $0.id,
@@ -157,6 +212,10 @@ private struct VesperDebugLogPayload: Encodable {
     let tasks: [Task]
     let reminders: [Reminder]
     let summaries: [Summary]
+    let journalSettings: [JournalSettings]
+    let journals: [Journal]
+    let calendarEventSnapshots: [CalendarEventSnapshot]
+    let healthDailySummaries: [HealthDailySummary]
     let toolAuditLogs: [ToolAuditLog]
     let providerProfiles: [ProviderProfile]
 
@@ -223,6 +282,57 @@ private struct VesperDebugLogPayload: Encodable {
         let date: Date
         let content: String
         let createdAt: Date
+    }
+
+    struct JournalSettings: Encodable {
+        let id: UUID
+        let morningHour: Int
+        let morningMinute: Int
+        let eveningHour: Int
+        let eveningMinute: Int
+        let isMorningPromptEnabled: Bool
+        let isEveningPromptEnabled: Bool
+        let isCalendarImportEnabled: Bool
+        let isHealthImportEnabled: Bool
+        let lastMorningPromptDate: Date?
+        let lastEveningPromptDate: Date?
+        let lastWeeklySummaryDate: Date?
+        let updatedAt: Date
+    }
+
+    struct Journal: Encodable {
+        let id: UUID
+        let kind: String
+        let date: Date
+        let title: String
+        let body: String
+        let createdAt: Date
+        let updatedAt: Date
+    }
+
+    struct CalendarEventSnapshot: Encodable {
+        let id: UUID
+        let eventIdentifier: String
+        let externalIdentifier: String?
+        let title: String
+        let notes: String
+        let startDate: Date
+        let endDate: Date
+        let calendarTitle: String
+        let isAllDay: Bool
+        let lastSeenAt: Date
+    }
+
+    struct HealthDailySummary: Encodable {
+        let id: UUID
+        let date: Date
+        let stepCount: Double
+        let activeEnergyKilocalories: Double
+        let exerciseMinutes: Double
+        let sleepMinutes: Double
+        let sleepInBedMinutes: Double
+        let sourceDescription: String
+        let updatedAt: Date
     }
 
     struct ToolAuditLog: Encodable {
