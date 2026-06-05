@@ -143,6 +143,29 @@ open DiaryCompanion.xcodeproj
 
 然后选择 `DiaryCompanion` scheme，选择模拟器或真机运行。
 
+## 使用 IPA 和爱思助手安装
+
+开发预览版会在 GitHub Release 中提供 `Vesper-dev.ipa`。下载后可以用爱思助手导入 IPA，并点击一键安装到 iPhone。
+
+重要限制：
+
+- 这个 IPA 使用 Apple Development provisioning profile 签名，只能安装到该 profile 覆盖的设备。
+- 如果安装到同学的 iPhone，需要先把对方设备 UDID 加入 Apple Developer 账号并重新打包，或改用 TestFlight。
+- 首次打开时，如果系统提示“不受信任的开发者”，需要在 iPhone 的 **设置 > 通用 > VPN 与设备管理** 中信任开发者证书。
+- iOS 26+ 才支持真闹钟；低版本仍可使用普通通知、日历和时间线。
+
+开发者本地重新打包 IPA：
+
+```bash
+scripts/build-ipa.sh
+```
+
+生成文件位于：
+
+```text
+artifacts/ipa/Vesper-dev.ipa
+```
+
 ## Provider 设置
 
 在 App 中打开 **设置 > AI Provider > 新增 Provider**。

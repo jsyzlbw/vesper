@@ -143,6 +143,29 @@ open DiaryCompanion.xcodeproj
 
 Then select the `DiaryCompanion` scheme, choose a simulator or device, and run.
 
+## Install with an IPA
+
+Development preview builds may be published as `Vesper-dev.ipa` in GitHub Releases. After downloading the IPA, tools such as 3uTools can import it and install it to an iPhone with one click.
+
+Important limitations:
+
+- The IPA is signed with an Apple Development provisioning profile and only installs on devices covered by that profile.
+- To install on classmates' iPhones, add their device UDIDs to the Apple Developer account and rebuild the IPA, or use TestFlight.
+- On first launch, iOS may require trusting the developer certificate in **Settings > General > VPN & Device Management**.
+- Real alarms require iOS 26+; older systems can still use ordinary notifications, calendar, and timeline features.
+
+To rebuild the IPA locally:
+
+```bash
+scripts/build-ipa.sh
+```
+
+The output is:
+
+```text
+artifacts/ipa/Vesper-dev.ipa
+```
+
 ## Provider Setup
 
 In the app, open **Settings > AI Provider > Add Provider**.
