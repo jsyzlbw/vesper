@@ -303,7 +303,7 @@ struct JournalAutomationService {
 
     private func appendAssistantMessage(_ content: String) throws {
         let conversationRepository = ConversationRepository(context: context)
-        let conversation = try conversationRepository.defaultConversation()
+        let conversation = try conversationRepository.dailyConversation()
         try conversationRepository.createMessage(
             conversationID: conversation.id,
             role: .assistant,

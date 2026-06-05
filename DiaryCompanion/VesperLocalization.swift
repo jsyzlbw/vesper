@@ -41,6 +41,14 @@ struct VesperStrings {
     var timelineDescription: String { text("AI 保存的日记、任务、提醒、闹钟和总结会出现在这里。", "Diaries, tasks, reminders, alarms, and summaries saved by AI will appear here.") }
     var startConversation: String { text("开始对话", "Start a conversation") }
     var startConversationDescription: String { text("连接 AI Provider 后，通过自然语言记录生活。", "Connect an AI provider, then describe what you need in natural language.") }
+    var conversationHistory: String { text("历史对话", "Conversation history") }
+    var todayConversation: String { text("今天的对话", "Today's conversation") }
+    func emptyConversationDescription(_ title: String) -> String {
+        text(
+            "\(title) 还没有消息。每天早上 4 点后，Vesper 会自动开启新的当天对话。",
+            "\(title) has no messages yet. Vesper starts a new daily conversation after 4 AM."
+        )
+    }
     var naturalLanguagePlaceholder: String { text("输入自然语言要求", "Describe what you need") }
     var naturalLanguage: String { text("自然语言要求", "Natural language request") }
     var dismissKeyboard: String { text("收起键盘", "Dismiss keyboard") }

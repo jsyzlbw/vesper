@@ -27,6 +27,52 @@ public final class ConversationRepository {
         return conversation
     }
 
+    public func dailyConversation(
+        now: Date = Date(),
+        rolloverHour: Int = 4,
+        calendar: Calendar = .current
+    ) throws -> ConversationRecord {
+        let day = Self.logicalDay(
+            for: now,
+            rolloverHour: rolloverHour,
+            calendar: calendar
+        )
+        if let existing = try findConversation(logicalDay: day) {
+            return existing
+        }
+
+        let conversation = ConversationRecord(
+            title: Self.dailyTitle(for: day),
+            logicalDay: day,
+            createdAt: now,
+            updatedAt: now
+        )
+        context.insert(conversation)
+        try context.save()
+        return conversation
+    }
+
+    public nonisolated static func logicalDay(
+        for date: Date,
+        rolloverHour: Int = 4,
+        calendar: Calendar = .current
+    ) -> Date {
+        let safeHour = min(max(rolloverHour, 0), 23)
+        let hour = calendar.component(.hour, from: date)
+        let effectiveDate = hour < safeHour
+            ? calendar.date(byAdding: .day, value: -1, to: date) ?? date
+            : date
+        return calendar.startOfDay(for: effectiveDate)
+    }
+
+    public nonisolated static func dailyTitle(for logicalDay: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = .current
+        formatter.locale = Locale(identifier: "zh_Hans_CN")
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter.string(from: logicalDay)
+    }
+
     @discardableResult
     public func createMessage(
         conversationID: UUID,
@@ -63,7 +109,7 @@ public final class ConversationRepository {
 
     public func fetchConversations() throws -> [ConversationRecord] {
         var descriptor = FetchDescriptor<ConversationRecord>()
-        descriptor.sortBy = [SortDescriptor(\.createdAt)]
+        descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]
         return try context.fetch(descriptor)
     }
 
@@ -78,6 +124,13 @@ public final class ConversationRepository {
     private func findConversation(id: UUID) throws -> ConversationRecord? {
         let descriptor = FetchDescriptor<ConversationRecord>(
             predicate: #Predicate { $0.id == id }
+        )
+        return try context.fetch(descriptor).first
+    }
+
+    private func findConversation(logicalDay: Date) throws -> ConversationRecord? {
+        let descriptor = FetchDescriptor<ConversationRecord>(
+            predicate: #Predicate { $0.logicalDay == logicalDay }
         )
         return try context.fetch(descriptor).first
     }

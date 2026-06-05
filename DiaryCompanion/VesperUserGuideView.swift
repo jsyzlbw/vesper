@@ -21,6 +21,11 @@ struct VesperUserGuideView: View {
                     Text("Vesper 让你直接用自然语言描述计划。信息足够时，AI 会生成一张可编辑的提醒卡片。只有你点击确认后，应用才会创建通知、真闹钟或日历事件。当前版本无需 Mac 常驻服务。")
                 }
 
+                GuideSection(title: "每日对话与历史") {
+                    Text("Vesper 会每天自动开启一个新的对话，用来保存当天的自然语言请求、AI 回复和提醒卡片。为了适应晚睡习惯，日期不是午夜 0 点切换，而是每天早上 4 点切换；也就是说，凌晨 0 点到 3:59 的对话仍归入前一天。")
+                    Text("在“对话”页右上角点击“历史对话”按钮，可以切换查看之前日期的对话。旧的默认对话会继续保留在历史列表里，不会丢失。")
+                }
+
                 GuideSection(title: "设置 AI Provider") {
                     Text("进入“设置”，点击右上角“新增 Provider”。依次选择平台，填写显示名称、Base URL、模型名称和 API Key，检查实际 Endpoint，再点击“测试连接”。成功后保存，并保持 Provider 启用。API Key 保存在系统 Keychain 中。")
                     GuideExample(
@@ -43,6 +48,11 @@ struct VesperUserGuideView: View {
                     Text("开启“同步到日历”后，Vesper 会在你确认时请求日历权限，并创建事件。重复提醒会按规则创建重复日程。")
                 }
 
+                GuideSection(title: "早晚提醒与周总结") {
+                    Text("在“设置”的“日记与周记”区域，可以设置早晨主动提醒、晚上复盘提醒、通知后多少分钟升级为真闹铃，以及是否启用每周总结。早晚提醒会先发送普通通知；如果你在等待时间内没有打开 App，iOS 26 及以上会使用真闹铃升级提醒。")
+                    Text("每周总结可以选择具体星期和时间。到点后，Vesper 会整理本周日历、运动、睡眠和对话记录，并在时间线里生成周记，同时给出生活健康建议。")
+                }
+
                 GuideSection(title: "自动排期") {
                     Text("需要灵活安排时，可以让 Vesper 查询所有可见日历，并在指定范围内选择最早可用时段。自动排期完成后仍会生成卡片，等待你确认。")
                     GuideExample(
@@ -62,7 +72,7 @@ struct VesperUserGuideView: View {
                     GuideBulletList(items: [
                         "Anthropic 和 Gemini 尚未接入聊天流。",
                         "OAuth 登录与 iCloud 同步尚未实现，目前使用 API Key，数据保存在本机。",
-                        "“时间线”和“审计”页已有入口，完整内容展示仍待完善。",
+                        "每天 4 点切换新对话；如果你想把凌晨内容归入当天，需要等后续版本提供自定义切换时间。",
                         "AI 输出仍可能偶尔不生成结构化卡片；重新描述需求通常可以恢复。",
                     ])
                 }

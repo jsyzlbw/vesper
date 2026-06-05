@@ -47,6 +47,7 @@ struct VesperDebugLogExporter {
                 .init(
                     id: $0.id,
                     title: $0.title,
+                    logicalDay: $0.logicalDay,
                     createdAt: $0.createdAt,
                     updatedAt: $0.updatedAt
                 )
@@ -229,6 +230,7 @@ private struct VesperDebugLogPayload: Encodable {
     struct Conversation: Encodable {
         let id: UUID
         let title: String
+        let logicalDay: Date?
         let createdAt: Date
         let updatedAt: Date
     }

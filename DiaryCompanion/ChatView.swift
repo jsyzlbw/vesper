@@ -8,9 +8,12 @@ struct ChatView: View {
     @Environment(\.vesperLocalization) private var localization
     @Query(sort: \MessageRecord.createdAt)
     private var messages: [MessageRecord]
+    @Query(sort: \ConversationRecord.createdAt, order: .reverse)
+    private var conversations: [ConversationRecord]
     @Query(sort: \ReminderRecord.fireDate)
     private var reminders: [ReminderRecord]
     @State private var draft = ""
+    @State private var selectedConversationID: UUID?
     @State private var isSending = false
     @State private var statusText: String?
     @State private var errorMessage: String?
@@ -20,16 +23,16 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             Group {
-                if visibleMessages.isEmpty {
+                if selectedConversationMessages.isEmpty {
                     ContentUnavailableView(
                         localization.strings.startConversation,
                         systemImage: "bubble.left.and.bubble.right",
-                        description: Text(localization.strings.startConversationDescription)
+                        description: Text(emptyConversationDescription)
                     )
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(visibleMessages) { message in
+                            ForEach(selectedConversationMessages) { message in
                                 VStack(alignment: .leading, spacing: 9) {
                                     if !message.content.isEmpty {
                                         ChatBubble(message: message)
@@ -63,13 +66,22 @@ struct ChatView: View {
                             isComposerFocused = false
                         }
                     )
-                    .onChange(of: messages.count) {
+                    .onChange(of: selectedConversationMessages.count) {
                         scrollToLatest(using: proxy)
                     }
                 }
             }
         }
-        .navigationTitle(localization.strings.chat)
+        .navigationTitle(selectedConversationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                conversationMenu
+            }
+        }
+        .task {
+            ensureCurrentDailyConversation()
+        }
         .safeAreaInset(edge: .bottom) {
             composer
         }
@@ -139,12 +151,67 @@ struct ChatView: View {
         }
     }
 
-    private var visibleMessages: [MessageRecord] {
-        messages.filter { !$0.content.isEmpty }
+    private var selectedConversationMessages: [MessageRecord] {
+        guard let selectedConversationID else {
+            return []
+        }
+        return messages.filter {
+            $0.conversationID == selectedConversationID && !$0.content.isEmpty
+        }
+    }
+
+    private var selectedConversation: ConversationRecord? {
+        guard let selectedConversationID else {
+            return nil
+        }
+        return conversations.first { $0.id == selectedConversationID }
+    }
+
+    private var selectedConversationTitle: String {
+        selectedConversation.map(conversationTitle) ?? localization.strings.chat
+    }
+
+    private var emptyConversationDescription: String {
+        if let selectedConversation {
+            localization.strings.emptyConversationDescription(
+                conversationTitle(selectedConversation)
+            )
+        } else {
+            localization.strings.startConversationDescription
+        }
     }
 
     private var trimmedDraft: String {
         draft.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var conversationMenu: some View {
+        Menu {
+            Button {
+                ensureCurrentDailyConversation(forceSelect: true)
+            } label: {
+                Label(localization.strings.todayConversation, systemImage: "sun.max")
+            }
+
+            if !conversations.isEmpty {
+                Divider()
+            }
+
+            ForEach(conversations) { conversation in
+                Button {
+                    selectedConversationID = conversation.id
+                } label: {
+                    if selectedConversationID == conversation.id {
+                        Label(conversationTitle(conversation), systemImage: "checkmark")
+                    } else {
+                        Text(conversationTitle(conversation))
+                    }
+                }
+            }
+        } label: {
+            Label(localization.strings.conversationHistory, systemImage: "calendar")
+        }
+        .disabled(isSending)
     }
 
     private func send() {
@@ -182,7 +249,7 @@ struct ChatView: View {
             }
 
             let conversationRepository = ConversationRepository(context: modelContext)
-            let conversation = try conversationRepository.defaultConversation()
+            let conversation = try activeConversation(repository: conversationRepository)
             try conversationRepository.createMessage(
                 conversationID: conversation.id,
                 role: .user,
@@ -377,7 +444,7 @@ struct ChatView: View {
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
-        guard let id = visibleMessages.last?.id else {
+        guard let id = selectedConversationMessages.last?.id else {
             return
         }
         withAnimation {
@@ -387,6 +454,40 @@ struct ChatView: View {
 
     private func reminders(for messageID: UUID) -> [ReminderRecord] {
         reminders.filter { $0.sourceMessageID == messageID }
+    }
+
+    private func ensureCurrentDailyConversation(forceSelect: Bool = false) {
+        do {
+            let conversation = try ConversationRepository(context: modelContext)
+                .dailyConversation()
+            if forceSelect || selectedConversationID == nil {
+                selectedConversationID = conversation.id
+            }
+        } catch {
+            errorMessage = localizedMessage(for: error)
+        }
+    }
+
+    private func activeConversation(
+        repository: ConversationRepository
+    ) throws -> ConversationRecord {
+        if let selectedConversationID,
+           let selectedConversation = conversations.first(where: { $0.id == selectedConversationID }) {
+            return selectedConversation
+        }
+        let conversation = try repository.dailyConversation()
+        selectedConversationID = conversation.id
+        return conversation
+    }
+
+    private func conversationTitle(_ conversation: ConversationRecord) -> String {
+        if let logicalDay = conversation.logicalDay {
+            return logicalDay.formatted(
+                Date.FormatStyle(date: .abbreviated, time: .omitted)
+                    .locale(localization.locale)
+            )
+        }
+        return conversation.title
     }
 
     private func reminderProposal(for reminder: ReminderRecord) -> ReminderProposal? {

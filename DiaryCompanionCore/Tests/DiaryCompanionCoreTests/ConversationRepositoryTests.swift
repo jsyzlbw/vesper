@@ -51,6 +51,79 @@ import Testing
 }
 
 @MainActor
+@Test func dailyConversationUsesFourAMRollover() throws {
+    let container = try DiaryModelContainerFactory.make(inMemory: true)
+    let repository = ConversationRepository(context: container.mainContext)
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+
+    let beforeRollover = try #require(calendar.date(
+        from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 5,
+            hour: 3,
+            minute: 59
+        )
+    ))
+    let atRollover = try #require(calendar.date(
+        from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 5,
+            hour: 4,
+            minute: 0
+        )
+    ))
+    let juneFourth = try #require(calendar.date(
+        from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 4
+        )
+    ))
+    let juneFifth = try #require(calendar.date(
+        from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 5
+        )
+    ))
+
+    #expect(ConversationRepository.logicalDay(
+        for: beforeRollover,
+        calendar: calendar
+    ) == juneFourth)
+    #expect(ConversationRepository.logicalDay(
+        for: atRollover,
+        calendar: calendar
+    ) == juneFifth)
+
+    let first = try repository.dailyConversation(
+        now: beforeRollover,
+        calendar: calendar
+    )
+    let second = try repository.dailyConversation(
+        now: beforeRollover.addingTimeInterval(30),
+        calendar: calendar
+    )
+    let third = try repository.dailyConversation(
+        now: atRollover,
+        calendar: calendar
+    )
+
+    #expect(first.id == second.id)
+    #expect(first.id != third.id)
+    #expect(first.logicalDay == juneFourth)
+    #expect(third.logicalDay == juneFifth)
+    #expect(try repository.fetchConversations().count == 2)
+}
+
+@MainActor
 @Test func replacingUnknownMessageReusesMessageNotFoundError() throws {
     let container = try DiaryModelContainerFactory.make(inMemory: true)
     let repository = ConversationRepository(context: container.mainContext)

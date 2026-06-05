@@ -4,17 +4,20 @@ import SwiftData
 @Model public final class ConversationRecord {
     @Attribute(.unique) public var id: UUID
     public var title: String
+    public var logicalDay: Date?
     public var createdAt: Date
     public var updatedAt: Date
 
     public init(
         id: UUID = UUID(),
         title: String,
+        logicalDay: Date? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
         self.id = id
         self.title = title
+        self.logicalDay = logicalDay
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
