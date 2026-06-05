@@ -73,7 +73,68 @@ struct ProviderSettingsView: View {
                     displayedComponents: .hourAndMinute
                 )
                 .disabled(!(journalSettings.first?.isEveningPromptEnabled ?? true))
+            } header: {
+                Text(localization.strings.dailyJournalPrompts)
+            }
 
+            Section {
+                Toggle(
+                    localization.strings.morningEscalationAlarm,
+                    isOn: journalBooleanBinding(\.isMorningEscalationAlarmEnabled)
+                )
+                Toggle(
+                    localization.strings.eveningEscalationAlarm,
+                    isOn: journalBooleanBinding(\.isEveningEscalationAlarmEnabled)
+                )
+                Stepper(
+                    localization.strings.escalationDelayMinutes(
+                        journalSettings.first?.escalationDelayMinutes ?? 15
+                    ),
+                    value: journalIntBinding(
+                        \.escalationDelayMinutes,
+                        defaultValue: 15,
+                        range: 1...180
+                    ),
+                    in: 1...180,
+                    step: 5
+                )
+            } header: {
+                Text(localization.strings.escalationAlarm)
+            } footer: {
+                Text(localization.strings.escalationAlarmFooter)
+            }
+
+            Section {
+                Toggle(
+                    localization.strings.weeklySummaryEnabled,
+                    isOn: journalBooleanBinding(\.isWeeklySummaryEnabled)
+                )
+                Picker(
+                    localization.strings.weeklySummaryWeekday,
+                    selection: journalIntBinding(
+                        \.weeklySummaryWeekday,
+                        defaultValue: 1,
+                        range: 1...7
+                    )
+                ) {
+                    ForEach(1...7, id: \.self) { weekday in
+                        Text(localization.strings.weekdayName(weekday))
+                            .tag(weekday)
+                    }
+                }
+                DatePicker(
+                    localization.strings.weeklySummaryTime,
+                    selection: weeklySummaryTimeBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .disabled(!(journalSettings.first?.isWeeklySummaryEnabled ?? true))
+            } header: {
+                Text(localization.strings.weeklyJournalTitle)
+            } footer: {
+                Text(localization.strings.weeklySummaryFooter)
+            }
+
+            Section {
                 Toggle(
                     localization.strings.importVisibleCalendars,
                     isOn: journalBooleanBinding(\.isCalendarImportEnabled)
@@ -197,6 +258,24 @@ struct ProviderSettingsView: View {
         )
     }
 
+    private var weeklySummaryTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                timeDate(
+                    hour: journalSettings.first?.weeklySummaryHour ?? 20,
+                    minute: journalSettings.first?.weeklySummaryMinute ?? 0
+                )
+            },
+            set: { date in
+                saveJournalSetting { settings in
+                    let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                    settings.weeklySummaryHour = components.hour ?? 20
+                    settings.weeklySummaryMinute = components.minute ?? 0
+                }
+            }
+        )
+    }
+
     private func journalBooleanBinding(
         _ keyPath: ReferenceWritableKeyPath<JournalSettingsRecord, Bool>
     ) -> Binding<Bool> {
@@ -205,6 +284,26 @@ struct ProviderSettingsView: View {
             set: { value in
                 saveJournalSetting { settings in
                     settings[keyPath: keyPath] = value
+                }
+            }
+        )
+    }
+
+    private func journalIntBinding(
+        _ keyPath: ReferenceWritableKeyPath<JournalSettingsRecord, Int>,
+        defaultValue: Int,
+        range: ClosedRange<Int>
+    ) -> Binding<Int> {
+        Binding(
+            get: {
+                guard let value = journalSettings.first?[keyPath: keyPath] else {
+                    return defaultValue
+                }
+                return min(max(value, range.lowerBound), range.upperBound)
+            },
+            set: { value in
+                saveJournalSetting { settings in
+                    settings[keyPath: keyPath] = min(max(value, range.lowerBound), range.upperBound)
                 }
             }
         )

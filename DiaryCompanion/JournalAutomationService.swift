@@ -5,6 +5,11 @@ import HealthKit
 import SwiftData
 import UserNotifications
 
+#if canImport(AlarmKit)
+@preconcurrency import AlarmKit
+import SwiftUI
+#endif
+
 @MainActor
 struct JournalAutomationService {
     let context: ModelContext
@@ -17,6 +22,7 @@ struct JournalAutomationService {
         }
 
         await schedulePrompts(settings: settings)
+        await scheduleEscalationAlarms(settings: settings)
         if settings.isCalendarImportEnabled {
             await importCalendarEvents(repository: repository)
         }
@@ -36,6 +42,7 @@ struct JournalAutomationService {
             withIdentifiers: [
                 Self.morningNotificationIdentifier,
                 Self.eveningNotificationIdentifier,
+                Self.weeklyNotificationIdentifier,
             ]
         )
 
@@ -59,6 +66,18 @@ struct JournalAutomationService {
                     minute: settings.eveningMinute,
                     title: localization.strings.eveningJournalTitle,
                     body: localization.strings.eveningJournalNotificationBody
+                )
+            )
+        }
+        if settings.isWeeklySummaryEnabled {
+            requests.append(
+                weeklyNotificationRequest(
+                    identifier: Self.weeklyNotificationIdentifier,
+                    weekday: settings.weeklySummaryWeekday,
+                    hour: settings.weeklySummaryHour,
+                    minute: settings.weeklySummaryMinute,
+                    title: localization.strings.weeklyJournalTitle,
+                    body: localization.strings.weeklyJournalNotificationBody
                 )
             )
         }
@@ -92,6 +111,44 @@ struct JournalAutomationService {
             content: content,
             trigger: trigger
         )
+    }
+
+    private func weeklyNotificationRequest(
+        identifier: String,
+        weekday: Int,
+        hour: Int,
+        minute: Int,
+        title: String,
+        body: String
+    ) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        var components = DateComponents()
+        components.weekday = weekday
+        components.hour = hour
+        components.minute = minute
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: components,
+            repeats: true
+        )
+        return UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
+    }
+
+    private func scheduleEscalationAlarms(settings: JournalSettingsRecord) async {
+#if canImport(AlarmKit)
+        guard #available(iOS 26.0, *) else {
+            return
+        }
+        let scheduler = JournalEscalationAlarmScheduler(localization: localization)
+        await scheduler.refresh(settings: settings)
+#endif
     }
 
     private func importCalendarEvents(repository: DiaryRepository) async {
@@ -221,10 +278,11 @@ struct JournalAutomationService {
         settings: JournalSettingsRecord,
         now: Date
     ) {
-        let calendar = Calendar.current
-        guard calendar.component(.weekday, from: now) == calendar.firstWeekday else {
+        guard settings.isWeeklySummaryEnabled,
+              isWeeklyTimeDue(settings: settings, now: now) else {
             return
         }
+        let calendar = Calendar.current
         if let lastWeeklySummaryDate = settings.lastWeeklySummaryDate,
            calendar.isDate(lastWeeklySummaryDate, equalTo: now, toGranularity: .weekOfYear) {
             return
@@ -237,6 +295,7 @@ struct JournalAutomationService {
             title: localization.strings.weeklyJournalTitle,
             body: body
         )
+        try? appendAssistantMessage(localization.strings.weeklyAssistantMessage(body))
         try? repository.saveJournalSettings {
             $0.lastWeeklySummaryDate = now
         }
@@ -295,10 +354,14 @@ struct JournalAutomationService {
             .filter { $0.date >= start && $0.date < end }
         let steps = health.reduce(0) { $0 + $1.stepCount }
         let sleepMinutes = health.reduce(0) { $0 + $1.sleepMinutes }
+        let exerciseMinutes = health.reduce(0) { $0 + $1.exerciseMinutes }
+        let dayCount = max(health.count, 1)
         return localization.strings.weeklyJournalBody(
             eventCount: eventCount,
             stepCount: Int(steps.rounded()),
-            sleepHours: sleepMinutes / 60
+            sleepHours: sleepMinutes / 60,
+            averageSleepHours: sleepMinutes / 60 / Double(dayCount),
+            exerciseMinutes: Int(exerciseMinutes.rounded())
         )
     }
 
@@ -353,8 +416,21 @@ struct JournalAutomationService {
         return date >= target
     }
 
+    private func isWeeklyTimeDue(settings: JournalSettingsRecord, now: Date) -> Bool {
+        let calendar = Calendar.current
+        guard calendar.component(.weekday, from: now) == settings.weeklySummaryWeekday else {
+            return false
+        }
+        return isNowPast(
+            hour: settings.weeklySummaryHour,
+            minute: settings.weeklySummaryMinute,
+            on: now
+        )
+    }
+
     private static let morningNotificationIdentifier = "vesper.journal.morning"
     private static let eveningNotificationIdentifier = "vesper.journal.evening"
+    private static let weeklyNotificationIdentifier = "vesper.journal.weekly"
 }
 
 enum JournalKind: String {
@@ -480,3 +556,171 @@ private struct HealthSummaryReader {
         return DateInterval(start: start, end: end)
     }
 }
+
+#if canImport(AlarmKit)
+@available(iOS 26.0, *)
+@MainActor
+private struct JournalEscalationAlarmScheduler {
+    let localization: VesperLocalizationContext
+    private let manager = AlarmManager.shared
+
+    func refresh(settings: JournalSettingsRecord) async {
+        guard ((try? await manager.requestAuthorization()) == .authorized) else {
+            return
+        }
+
+        let identifiers = allCandidateIdentifiers(settings: settings)
+        remove(ids: identifiers)
+
+        var alarms: [(id: UUID, title: String, date: Date)] = []
+        if settings.isMorningPromptEnabled,
+           settings.isMorningEscalationAlarmEnabled {
+            alarms.append(
+                contentsOf: escalationAlarms(
+                    seed: "morning",
+                    title: localization.strings.morningJournalTitle,
+                    hour: settings.morningHour,
+                    minute: settings.morningMinute,
+                    delayMinutes: settings.escalationDelayMinutes
+                )
+            )
+        }
+        if settings.isEveningPromptEnabled,
+           settings.isEveningEscalationAlarmEnabled {
+            alarms.append(
+                contentsOf: escalationAlarms(
+                    seed: "evening",
+                    title: localization.strings.eveningJournalTitle,
+                    hour: settings.eveningHour,
+                    minute: settings.eveningMinute,
+                    delayMinutes: settings.escalationDelayMinutes
+                )
+            )
+        }
+
+        for alarm in alarms {
+            let configuration = AlarmManager.AlarmConfiguration<VesperAlarmMetadata>.alarm(
+                schedule: .fixed(alarm.date),
+                attributes: AlarmAttributes(
+                    presentation: AlarmPresentation(
+                        alert: alert(title: alarm.title)
+                    ),
+                    metadata: VesperAlarmMetadata(reminderID: alarm.id),
+                    tintColor: .accentColor
+                )
+            )
+            _ = try? await manager.schedule(id: alarm.id, configuration: configuration)
+        }
+    }
+
+    private func escalationAlarms(
+        seed: String,
+        title: String,
+        hour: Int,
+        minute: Int,
+        delayMinutes: Int
+    ) -> [(id: UUID, title: String, date: Date)] {
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let safeDelay = min(max(delayMinutes, 1), 180)
+        return (0..<30).compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today),
+                  let promptDate = promptDate(day: day, hour: hour, minute: minute),
+                  let alarmDate = calendar.date(
+                    byAdding: .minute,
+                    value: safeDelay,
+                    to: promptDate
+                  )
+            else {
+                return nil
+            }
+            if offset == 0, now >= promptDate {
+                return nil
+            }
+            guard alarmDate > now else {
+                return nil
+            }
+            return (
+                id: stableIdentifier(seed: "vesper.journal.\(seed).\(dateKey(day))"),
+                title: title,
+                date: alarmDate
+            )
+        }
+    }
+
+    private func allCandidateIdentifiers(settings: JournalSettingsRecord) -> [UUID] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return (-1..<45).flatMap { offset -> [UUID] in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else {
+                return []
+            }
+            return [
+                stableIdentifier(seed: "vesper.journal.morning.\(dateKey(day))"),
+                stableIdentifier(seed: "vesper.journal.evening.\(dateKey(day))"),
+            ]
+        }
+    }
+
+    private func remove(ids: [UUID]) {
+        let existingIDs = (try? Set(manager.alarms.map(\.id))) ?? []
+        for id in ids where existingIDs.contains(id) {
+            try? manager.cancel(id: id)
+        }
+    }
+
+    private func promptDate(day: Date, hour: Int, minute: Int) -> Date? {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: day)
+        components.hour = hour
+        components.minute = minute
+        return Calendar.current.date(from: components)
+    }
+
+    private func dateKey(_ date: Date) -> String {
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
+    }
+
+    private func stableIdentifier(seed: String) -> UUID {
+        let bytes = Array(seed.utf8)
+        let first = fnv1a64(bytes, offset: 0xcbf29ce484222325)
+        let second = fnv1a64(bytes.reversed(), offset: 0x84222325cbf29ce4)
+        var uuidBytes = withUnsafeBytes(of: (first.bigEndian, second.bigEndian)) {
+            Array($0)
+        }
+        uuidBytes[6] = (uuidBytes[6] & 0x0f) | 0x80
+        uuidBytes[8] = (uuidBytes[8] & 0x3f) | 0x80
+        return UUID(uuid: (
+            uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+            uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+            uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+            uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+        ))
+    }
+
+    private func fnv1a64<S: Sequence>(
+        _ bytes: S,
+        offset: UInt64
+    ) -> UInt64 where S.Element == UInt8 {
+        bytes.reduce(offset) { hash, byte in
+            (hash ^ UInt64(byte)) &* 0x100000001b3
+        }
+    }
+
+    private func alert(title: String) -> AlarmPresentation.Alert {
+        let localizedTitle = LocalizedStringResource(stringLiteral: title)
+        if #available(iOS 26.1, *) {
+            return .init(title: localizedTitle)
+        }
+        return .init(
+            title: localizedTitle,
+            stopButton: AlarmButton(
+                text: "Stop",
+                textColor: .white,
+                systemImageName: "stop.fill"
+            )
+        )
+    }
+}
+#endif

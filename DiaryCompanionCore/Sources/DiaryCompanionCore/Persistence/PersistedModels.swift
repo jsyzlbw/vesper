@@ -290,14 +290,21 @@ import SwiftData
 
 @Model public final class JournalSettingsRecord {
     @Attribute(.unique) public var id: UUID
-    public var morningHour: Int
-    public var morningMinute: Int
-    public var eveningHour: Int
-    public var eveningMinute: Int
-    public var isMorningPromptEnabled: Bool
-    public var isEveningPromptEnabled: Bool
-    public var isCalendarImportEnabled: Bool
-    public var isHealthImportEnabled: Bool
+    public var morningHour: Int = 8
+    public var morningMinute: Int = 0
+    public var eveningHour: Int = 21
+    public var eveningMinute: Int = 30
+    public var isMorningPromptEnabled: Bool = true
+    public var isEveningPromptEnabled: Bool = true
+    public var isMorningEscalationAlarmEnabled: Bool = true
+    public var isEveningEscalationAlarmEnabled: Bool = true
+    public var escalationDelayMinutes: Int = 15
+    public var isWeeklySummaryEnabled: Bool = true
+    public var weeklySummaryWeekday: Int = 1
+    public var weeklySummaryHour: Int = 20
+    public var weeklySummaryMinute: Int = 0
+    public var isCalendarImportEnabled: Bool = true
+    public var isHealthImportEnabled: Bool = true
     public var lastMorningPromptDate: Date?
     public var lastEveningPromptDate: Date?
     public var lastWeeklySummaryDate: Date?
@@ -311,6 +318,13 @@ import SwiftData
         eveningMinute: Int = 30,
         isMorningPromptEnabled: Bool = true,
         isEveningPromptEnabled: Bool = true,
+        isMorningEscalationAlarmEnabled: Bool = true,
+        isEveningEscalationAlarmEnabled: Bool = true,
+        escalationDelayMinutes: Int = 15,
+        isWeeklySummaryEnabled: Bool = true,
+        weeklySummaryWeekday: Int = 1,
+        weeklySummaryHour: Int = 20,
+        weeklySummaryMinute: Int = 0,
         isCalendarImportEnabled: Bool = true,
         isHealthImportEnabled: Bool = true,
         lastMorningPromptDate: Date? = nil,
@@ -325,6 +339,13 @@ import SwiftData
         self.eveningMinute = eveningMinute
         self.isMorningPromptEnabled = isMorningPromptEnabled
         self.isEveningPromptEnabled = isEveningPromptEnabled
+        self.isMorningEscalationAlarmEnabled = isMorningEscalationAlarmEnabled
+        self.isEveningEscalationAlarmEnabled = isEveningEscalationAlarmEnabled
+        self.escalationDelayMinutes = escalationDelayMinutes
+        self.isWeeklySummaryEnabled = isWeeklySummaryEnabled
+        self.weeklySummaryWeekday = weeklySummaryWeekday
+        self.weeklySummaryHour = weeklySummaryHour
+        self.weeklySummaryMinute = weeklySummaryMinute
         self.isCalendarImportEnabled = isCalendarImportEnabled
         self.isHealthImportEnabled = isHealthImportEnabled
         self.lastMorningPromptDate = lastMorningPromptDate

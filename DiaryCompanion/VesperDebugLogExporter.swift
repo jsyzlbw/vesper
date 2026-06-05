@@ -123,6 +123,13 @@ struct VesperDebugLogExporter {
                     eveningMinute: $0.eveningMinute,
                     isMorningPromptEnabled: $0.isMorningPromptEnabled,
                     isEveningPromptEnabled: $0.isEveningPromptEnabled,
+                    isMorningEscalationAlarmEnabled: $0.isMorningEscalationAlarmEnabled,
+                    isEveningEscalationAlarmEnabled: $0.isEveningEscalationAlarmEnabled,
+                    escalationDelayMinutes: $0.escalationDelayMinutes,
+                    isWeeklySummaryEnabled: $0.isWeeklySummaryEnabled,
+                    weeklySummaryWeekday: $0.weeklySummaryWeekday,
+                    weeklySummaryHour: $0.weeklySummaryHour,
+                    weeklySummaryMinute: $0.weeklySummaryMinute,
                     isCalendarImportEnabled: $0.isCalendarImportEnabled,
                     isHealthImportEnabled: $0.isHealthImportEnabled,
                     lastMorningPromptDate: $0.lastMorningPromptDate,
@@ -292,6 +299,13 @@ private struct VesperDebugLogPayload: Encodable {
         let eveningMinute: Int
         let isMorningPromptEnabled: Bool
         let isEveningPromptEnabled: Bool
+        let isMorningEscalationAlarmEnabled: Bool
+        let isEveningEscalationAlarmEnabled: Bool
+        let escalationDelayMinutes: Int
+        let isWeeklySummaryEnabled: Bool
+        let weeklySummaryWeekday: Int
+        let weeklySummaryHour: Int
+        let weeklySummaryMinute: Int
         let isCalendarImportEnabled: Bool
         let isHealthImportEnabled: Bool
         let lastMorningPromptDate: Date?

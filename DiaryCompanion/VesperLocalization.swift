@@ -85,10 +85,30 @@ struct VesperStrings {
     var invalidBaseURL: String { text("请输入有效的 HTTP 或 HTTPS Base URL。", "Enter a valid HTTP or HTTPS Base URL.") }
 
     var journalAutomation: String { text("日记与周记", "Journal & weekly review") }
+    var dailyJournalPrompts: String { text("早晚主动对话", "Morning & evening prompts") }
     var morningPromptEnabled: String { text("早晨主动提醒", "Morning prompt") }
     var eveningPromptEnabled: String { text("晚上总结提醒", "Evening reflection") }
     var morningPromptTime: String { text("早晨时间", "Morning time") }
     var eveningPromptTime: String { text("晚上时间", "Evening time") }
+    var escalationAlarm: String { text("未打开时升级闹铃", "Escalate if unopened") }
+    var morningEscalationAlarm: String { text("早晨升级为闹铃", "Morning alarm escalation") }
+    var eveningEscalationAlarm: String { text("晚上升级为闹铃", "Evening alarm escalation") }
+    func escalationDelayMinutes(_ minutes: Int) -> String { text("等待 \(minutes) 分钟后响铃", "Ring after \(minutes) min") }
+    var escalationAlarmFooter: String {
+        text(
+            "Vesper 会先发普通通知。如果你在等待时间内打开 App，当天对应闹铃会自动取消；否则 iOS 26+ 会使用真闹铃。",
+            "Vesper sends a normal notification first. If you open the app during the waiting window, that day's alarm is cancelled; otherwise iOS 26+ uses a real alarm."
+        )
+    }
+    var weeklySummaryEnabled: String { text("生成本周总结", "Generate weekly review") }
+    var weeklySummaryWeekday: String { text("周总结星期", "Review day") }
+    var weeklySummaryTime: String { text("周总结时间", "Review time") }
+    var weeklySummaryFooter: String {
+        text(
+            "到点后 Vesper 会整理本周日程、运动和睡眠，并给出生活健康建议。",
+            "At the scheduled time, Vesper summarizes calendar, activity, and sleep, then adds lifestyle and health suggestions."
+        )
+    }
     var importVisibleCalendars: String { text("读取所有可见日历", "Import visible calendars") }
     var importHealthData: String { text("读取运动与睡眠", "Import activity and sleep") }
     var journalAutomationFooter: String {
@@ -194,6 +214,7 @@ struct VesperStrings {
     var weeklyJournalTitle: String { text("本周回顾", "Weekly review") }
     var morningJournalNotificationBody: String { text("来看看今天的日程和身体状态。", "Review today's schedule and body snapshot.") }
     var eveningJournalNotificationBody: String { text("花一分钟总结今天，Vesper 会帮你整理。", "Spend a minute reflecting. Vesper will organize it.") }
+    var weeklyJournalNotificationBody: String { text("本周总结准备好了，来看看节奏和健康建议。", "Your weekly review is ready with rhythm and health suggestions.") }
     var todayScheduleHeader: String { text("今日安排", "Today's schedule") }
     var healthSnapshotHeader: String { text("健康快照", "Health snapshot") }
     var noCalendarEventsToday: String { text("今天还没有日历事项。", "No calendar events today.") }
@@ -207,6 +228,9 @@ struct VesperStrings {
     func eveningAssistantMessage(_ body: String) -> String {
         text("晚上好。我们来收一下今天吧：\n\n\(body)", "Good evening. Let's gather today:\n\n\(body)")
     }
+    func weeklyAssistantMessage(_ body: String) -> String {
+        text("这是本周回顾和一点生活健康建议：\n\n\(body)", "Here is your weekly review and a few lifestyle-health suggestions:\n\n\(body)")
+    }
     func healthSummaryLine(
         steps: Int,
         energy: Int,
@@ -218,11 +242,23 @@ struct VesperStrings {
             "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min exercise, \(String(format: "%.1f", sleepHours)) h sleep"
         )
     }
-    func weeklyJournalBody(eventCount: Int, stepCount: Int, sleepHours: Double) -> String {
+    func weeklyJournalBody(
+        eventCount: Int,
+        stepCount: Int,
+        sleepHours: Double,
+        averageSleepHours: Double,
+        exerciseMinutes: Int
+    ) -> String {
         text(
-            "这一周共同步 \(eventCount) 个日历事项，累计约 \(stepCount) 步，记录睡眠 \(String(format: "%.1f", sleepHours)) 小时。可以继续补充：本周最重要的进展、遗憾、关系和下周重点。",
-            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, and \(String(format: "%.1f", sleepHours)) hours of sleep. Add the key progress, regrets, relationships, and next week's focus."
+            "这一周共同步 \(eventCount) 个日历事项，累计约 \(stepCount) 步，锻炼 \(exerciseMinutes) 分钟，记录睡眠 \(String(format: "%.1f", sleepHours)) 小时，日均 \(String(format: "%.1f", averageSleepHours)) 小时。\n\n建议：如果日均睡眠低于 7 小时，下周先把睡前 30 分钟留给低刺激活动；如果锻炼少于 150 分钟，可以安排 3 次 20-30 分钟的轻运动；如果日程很多，给自己预留至少一个无安排晚间。你也可以补充本周最重要的进展、遗憾、关系和下周重点。",
+            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, \(exerciseMinutes) exercise minutes, and \(String(format: "%.1f", sleepHours)) hours of sleep, averaging \(String(format: "%.1f", averageSleepHours)) hours per day.\n\nSuggestions: if average sleep is below 7 hours, protect the last 30 minutes before bed for low-stimulation time; if exercise is below 150 minutes, schedule 3 light 20-30 minute sessions; if your calendar is crowded, reserve at least one unscheduled evening. You can also add the week's key progress, regrets, relationships, and next week's focus."
         )
+    }
+    func weekdayName(_ weekday: Int) -> String {
+        let chinese = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        let english = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        let index = min(max(weekday, 1), 7) - 1
+        return language == .simplifiedChinese ? chinese[index] : english[index]
     }
     var pendingConfirmation: String { text("待确认", "Pending") }
     var executing: String { text("执行中", "Executing") }
