@@ -308,6 +308,7 @@ import SwiftData
     public var weeklySummaryMinute: Int = 0
     public var isCalendarImportEnabled: Bool = true
     public var isHealthImportEnabled: Bool = true
+    public var personalRoutineNotes: String = ""
     public var lastMorningPromptDate: Date?
     public var lastEveningPromptDate: Date?
     public var lastWeeklySummaryDate: Date?
@@ -330,6 +331,7 @@ import SwiftData
         weeklySummaryMinute: Int = 0,
         isCalendarImportEnabled: Bool = true,
         isHealthImportEnabled: Bool = true,
+        personalRoutineNotes: String = "",
         lastMorningPromptDate: Date? = nil,
         lastEveningPromptDate: Date? = nil,
         lastWeeklySummaryDate: Date? = nil,
@@ -351,6 +353,7 @@ import SwiftData
         self.weeklySummaryMinute = weeklySummaryMinute
         self.isCalendarImportEnabled = isCalendarImportEnabled
         self.isHealthImportEnabled = isHealthImportEnabled
+        self.personalRoutineNotes = personalRoutineNotes
         self.lastMorningPromptDate = lastMorningPromptDate
         self.lastEveningPromptDate = lastEveningPromptDate
         self.lastWeeklySummaryDate = lastWeeklySummaryDate

@@ -93,6 +93,20 @@ struct VesperStrings {
     var invalidBaseURL: String { text("请输入有效的 HTTP 或 HTTPS Base URL。", "Enter a valid HTTP or HTTPS Base URL.") }
 
     var journalAutomation: String { text("日记与周记", "Journal & weekly review") }
+    var personalRoutine: String { text("个人常规事项", "Personal routine") }
+    var personalRoutineNotes: String { text("每天必做与固定习惯", "Daily habits and fixed routines") }
+    var personalRoutinePlaceholder: String {
+        text(
+            "例如：每天 12:00-13:00 午饭；18:30 晚饭；23:30 后不安排高强度学习；周一三五晚上健身。",
+            "Example: lunch 12:00-13:00 daily; dinner at 18:30; avoid intense study after 23:30; gym on Mon/Wed/Fri evenings."
+        )
+    }
+    var personalRoutineFooter: String {
+        text(
+            "这段内容会作为系统提示词的一部分，帮助 AI 安排计划时避开三餐、睡眠、通勤和你的固定习惯。",
+            "This becomes part of the system prompt so AI can avoid meals, sleep, commute, and your fixed habits when planning."
+        )
+    }
     var dailyJournalPrompts: String { text("早晚主动对话", "Morning & evening prompts") }
     var morningPromptEnabled: String { text("早晨主动提醒", "Morning prompt") }
     var eveningPromptEnabled: String { text("晚上总结提醒", "Evening reflection") }

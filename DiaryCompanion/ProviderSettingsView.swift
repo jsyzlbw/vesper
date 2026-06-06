@@ -149,6 +149,25 @@ struct ProviderSettingsView: View {
                 Text(localization.strings.journalAutomationFooter)
             }
 
+            Section {
+                TextEditor(text: personalRoutineNotesBinding)
+                    .frame(minHeight: 120)
+                    .overlay(alignment: .topLeading) {
+                        if (journalSettings.first?.personalRoutineNotes ?? "").isEmpty {
+                            Text(localization.strings.personalRoutinePlaceholder)
+                                .foregroundStyle(.tertiary)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .textInputAutocapitalization(.sentences)
+            } header: {
+                Text(localization.strings.personalRoutine)
+            } footer: {
+                Text(localization.strings.personalRoutineFooter)
+            }
+
             Section(localization.strings.permissions) {
                 LabeledContent(
                     localization.strings.defaultPolicy,
@@ -304,6 +323,17 @@ struct ProviderSettingsView: View {
             set: { value in
                 saveJournalSetting { settings in
                     settings[keyPath: keyPath] = min(max(value, range.lowerBound), range.upperBound)
+                }
+            }
+        )
+    }
+
+    private var personalRoutineNotesBinding: Binding<String> {
+        Binding(
+            get: { journalSettings.first?.personalRoutineNotes ?? "" },
+            set: { value in
+                saveJournalSetting { settings in
+                    settings.personalRoutineNotes = value
                 }
             }
         )

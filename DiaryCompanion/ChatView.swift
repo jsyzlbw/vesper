@@ -283,23 +283,27 @@ struct ChatView: View {
                 parseResult.visibleText,
                 of: assistantMessageID
             )
-            if let proposal = parseResult.proposal {
+            if !parseResult.proposals.isEmpty {
                 let diaryRepository = DiaryRepository(context: modelContext)
                 if try diaryRepository.fetchReminders(
                     sourceMessageID: assistantMessageID
                 ).isEmpty {
-                    let reminder = try diaryRepository.createReminderProposal(
-                        proposal,
-                        sourceMessageID: assistantMessageID
+                    let calendarClient = EventKitCalendarClient()
+                    let autoSchedulingService = ReminderAutoSchedulingService(
+                        calendarClient: calendarClient
                     )
-                    let resolvedProposal = try await ReminderAutoSchedulingService(
-                        calendarClient: EventKitCalendarClient()
-                    ).resolve(proposal)
-                    if resolvedProposal != proposal {
-                        try diaryRepository.updateReminderProposal(
-                            id: reminder.id,
-                            proposal: resolvedProposal
+                    for proposal in parseResult.proposals {
+                        let reminder = try diaryRepository.createReminderProposal(
+                            proposal,
+                            sourceMessageID: assistantMessageID
                         )
+                        let resolvedProposal = try await autoSchedulingService.resolve(proposal)
+                        if resolvedProposal != proposal {
+                            try diaryRepository.updateReminderProposal(
+                                id: reminder.id,
+                                proposal: resolvedProposal
+                            )
+                        }
                     }
                 }
             }
@@ -369,7 +373,7 @@ struct ChatView: View {
         let shouldRepair = repairError != nil || policy.shouldRequestStructuredProposal(
             latestUserText: latestUserText,
             assistantText: initialResult?.visibleText ?? initialReply,
-            hasProposal: initialResult?.proposal != nil
+            hasProposal: !(initialResult?.proposals.isEmpty ?? true)
         )
         guard shouldRepair else {
             return initialResult!
@@ -397,7 +401,7 @@ struct ChatView: View {
         guard !policy.shouldRequestStructuredProposal(
             latestUserText: latestUserText,
             assistantText: repairedResult.visibleText,
-            hasProposal: repairedResult.proposal != nil
+            hasProposal: !repairedResult.proposals.isEmpty
         ) else {
             return ReminderProposalParseResult(
                 visibleText: policy.safeFallback(language: localization.language),
@@ -411,11 +415,15 @@ struct ChatView: View {
         _ rawText: String
     ) throws -> ReminderProposalParseResult {
         let result = try ReminderProposalEnvelopeParser().parse(rawText)
-        try result.proposal?.validateForCreation(referenceDate: Date())
+        for proposal in result.proposals {
+            try proposal.validateForCreation(referenceDate: Date())
+        }
         return result
     }
 
     private func chatMessages(from records: [MessageRecord]) throws -> [ChatMessage] {
+        let routineNotes = (try? DiaryRepository(context: modelContext)
+            .journalSettings().personalRoutineNotes) ?? ""
         var result = [
             ChatMessage(
                 role: .system,
@@ -431,6 +439,7 @@ struct ChatView: View {
                     now: Date(),
                     timeZone: .current
                 ))
+                \(ReminderAssistantPrompt.personalRoutineInstruction(routineNotes))
                 """
             ),
         ]
@@ -453,7 +462,13 @@ struct ChatView: View {
     }
 
     private func reminders(for messageID: UUID) -> [ReminderRecord] {
-        reminders.filter { $0.sourceMessageID == messageID }
+        reminders
+            .filter { $0.sourceMessageID == messageID }
+            .sorted { reminderDate($0) < reminderDate($1) }
+    }
+
+    private func reminderDate(_ reminder: ReminderRecord) -> Date {
+        reminder.fireDate
     }
 
     private func ensureCurrentDailyConversation(forceSelect: Bool = false) {

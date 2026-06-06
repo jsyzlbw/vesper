@@ -133,6 +133,7 @@ struct VesperDebugLogExporter {
                     weeklySummaryMinute: $0.weeklySummaryMinute,
                     isCalendarImportEnabled: $0.isCalendarImportEnabled,
                     isHealthImportEnabled: $0.isHealthImportEnabled,
+                    personalRoutineNotes: $0.personalRoutineNotes,
                     lastMorningPromptDate: $0.lastMorningPromptDate,
                     lastEveningPromptDate: $0.lastEveningPromptDate,
                     lastWeeklySummaryDate: $0.lastWeeklySummaryDate,
@@ -310,6 +311,7 @@ private struct VesperDebugLogPayload: Encodable {
         let weeklySummaryMinute: Int
         let isCalendarImportEnabled: Bool
         let isHealthImportEnabled: Bool
+        let personalRoutineNotes: String
         let lastMorningPromptDate: Date?
         let lastEveningPromptDate: Date?
         let lastWeeklySummaryDate: Date?

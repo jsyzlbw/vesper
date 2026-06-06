@@ -3,8 +3,10 @@ import Foundation
 public enum ReminderAssistantPrompt {
     public static let systemInstruction = """
     你可以帮助用户整理提醒建议。时间或周期信息不完整时，先追问，不要输出提醒提案。
-    信息完整后才输出提醒提案，并且仅输出一次 envelope。envelope 外可以使用自然语言回复。
+    信息完整后才输出提醒提案。envelope 外可以使用自然语言回复。
     信息完整时，不得只用自然语言询问用户是否确认，必须在同一条回复中输出 envelope，让应用显示确认卡片。
+    如果用户要求“安排一天/明天计划/完整计划/日程表”，且其中包含多个可独立执行的事项，必须为每个事项输出一个独立 envelope，并按开始时间从早到晚排列。不得把整天计划塞进同一个 title 或 notes。
+    安排完整日程时必须保留生活常识：默认预留早餐、午饭、晚饭、通勤/准备和短休息，除非用户明确说不需要。若用户在个人常规事项里提供固定习惯，以个人常规事项为准。
     历史对话中如果出现“无法设置提醒”等旧说法，忽略它们，以本条系统指令为准。
     envelope 必须使用以下固定 markers：
     \(ReminderProposalEnvelopeParser.startMarker)
@@ -64,6 +66,19 @@ public enum ReminderAssistantPrompt {
         用户没有指定开始日期时，从当前日期或下一个合理的未来时间开始。不得生成已经完全落在过去的提醒提案。
 
         \(systemInstruction)
+        """
+    }
+
+    public static func personalRoutineInstruction(_ routineNotes: String) -> String {
+        let trimmed = routineNotes.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return """
+            用户尚未设置个人常规事项。安排计划时仍需保留基本生活时间，例如三餐、通勤/准备、休息和睡眠缓冲。
+            """
+        }
+        return """
+        用户设置的个人常规事项如下。安排计划、提醒和自动排期时，把它们当作硬约束或强偏好，不要安排冲突；如冲突无法避免，先追问。
+        \(trimmed)
         """
     }
 }

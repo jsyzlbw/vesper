@@ -7,7 +7,10 @@ import Testing
 
     #expect(instruction.contains("时间或周期信息不完整"))
     #expect(instruction.contains("先追问"))
-    #expect(instruction.contains("仅输出一次"))
+    #expect(instruction.contains("每个事项输出一个独立 envelope"))
+    #expect(instruction.contains("按开始时间从早到晚排列"))
+    #expect(instruction.contains("不得把整天计划塞进同一个 title 或 notes"))
+    #expect(instruction.contains("默认预留早餐、午饭、晚饭、通勤/准备和短休息"))
     #expect(instruction.contains(ReminderProposalEnvelopeParser.startMarker))
     #expect(instruction.contains(ReminderProposalEnvelopeParser.endMarker))
     #expect(instruction.contains("envelope 外"))
@@ -52,6 +55,19 @@ import Testing
     #expect(instruction.contains("5=Thursday"))
     #expect(instruction.contains("6=Friday"))
     #expect(instruction.contains("7=Saturday"))
+}
+
+@Test func reminderAssistantPromptIncludesPersonalRoutineInstruction() {
+    let emptyInstruction = ReminderAssistantPrompt.personalRoutineInstruction("")
+    #expect(emptyInstruction.contains("用户尚未设置个人常规事项"))
+    #expect(emptyInstruction.contains("三餐"))
+
+    let routineInstruction = ReminderAssistantPrompt.personalRoutineInstruction(
+        "12:00-13:00 午饭\n18:30 晚饭"
+    )
+    #expect(routineInstruction.contains("用户设置的个人常规事项"))
+    #expect(routineInstruction.contains("12:00-13:00 午饭"))
+    #expect(routineInstruction.contains("不要安排冲突"))
 }
 
 @Test func reminderAssistantPromptIncludesCurrentLocalTime() {

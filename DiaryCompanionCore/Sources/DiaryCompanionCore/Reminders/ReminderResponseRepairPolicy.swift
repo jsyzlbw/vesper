@@ -32,7 +32,7 @@ public struct ReminderResponseRepairPolicy: Sendable {
         return """
         Your previous reply did not follow the reminder proposal contract.\(errorContext)
         Do not claim that any reminder, alarm, notification, or calendar event has been created.
-        If the reminder details are complete, reply again with exactly one required reminder proposal envelope so the app can show its confirmation card.
+        If the reminder details are complete, reply again with the required reminder proposal envelope(s) so the app can show confirmation cards. For multi-item plans, output one envelope per item, sorted by start time.
         If details are incomplete, ask one concise clarification question.
         """
     }

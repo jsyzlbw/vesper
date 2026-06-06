@@ -3,10 +3,18 @@ import Foundation
 public struct ReminderProposalParseResult: Equatable, Sendable {
     public var visibleText: String
     public var proposal: ReminderProposal?
+    public var proposals: [ReminderProposal]
 
     public init(visibleText: String, proposal: ReminderProposal?) {
         self.visibleText = visibleText
         self.proposal = proposal
+        self.proposals = proposal.map { [$0] } ?? []
+    }
+
+    public init(visibleText: String, proposals: [ReminderProposal]) {
+        self.visibleText = visibleText
+        self.proposals = proposals
+        self.proposal = proposals.first
     }
 }
 
@@ -17,26 +25,67 @@ public struct ReminderProposalEnvelopeParser: Sendable {
     public init() {}
 
     public func parse(_ text: String) throws -> ReminderProposalParseResult {
-        let startParts = text.components(separatedBy: Self.startMarker)
-        let endParts = text.components(separatedBy: Self.endMarker)
+        let startCount = text.components(separatedBy: Self.startMarker).count - 1
+        let endCount = text.components(separatedBy: Self.endMarker).count - 1
 
-        if startParts.count == 1, endParts.count == 1 {
+        if startCount == 0, endCount == 0 {
             return ReminderProposalParseResult(
                 visibleText: text.trimmingCharacters(in: .whitespacesAndNewlines),
-                proposal: nil
+                proposals: []
             )
         }
 
-        guard startParts.count == 2, endParts.count == 2,
-              let startRange = text.range(of: Self.startMarker),
-              let endRange = text.range(of: Self.endMarker),
-              startRange.upperBound <= endRange.lowerBound
-        else {
+        guard startCount == endCount else {
             throw ReminderProposalEnvelopeParserError.invalidEnvelope
         }
 
-        let json = text[startRange.upperBound..<endRange.lowerBound]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var remaining = text[...]
+        var visibleText = ""
+        var proposals: [ReminderProposal] = []
+
+        while let startRange = remaining.range(of: Self.startMarker) {
+            visibleText.append(contentsOf: remaining[..<startRange.lowerBound])
+            let envelopeBody = remaining[startRange.upperBound...]
+            guard let endRange = envelopeBody.range(of: Self.endMarker) else {
+                throw ReminderProposalEnvelopeParserError.invalidEnvelope
+            }
+
+            let json = envelopeBody[..<endRange.lowerBound]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let proposal = try decodeProposal(from: json)
+            try proposal.validate()
+            proposals.append(proposal)
+            remaining = envelopeBody[endRange.upperBound...]
+        }
+
+        visibleText.append(contentsOf: remaining)
+        proposals.sort { lhs, rhs in
+            switch (lhs.start, rhs.start) {
+            case let (left?, right?):
+                return left < right
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+        }
+        return ReminderProposalParseResult(
+            visibleText: normalizedVisibleText(visibleText),
+            proposals: proposals
+        )
+    }
+
+    private func normalizedVisibleText(_ text: String) -> String {
+        var normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while normalized.contains("\n\n") {
+            normalized = normalized.replacingOccurrences(of: "\n\n", with: "\n")
+        }
+        return normalized
+    }
+
+    private func decodeProposal(from json: String) throws -> ReminderProposal {
         guard !json.isEmpty else {
             throw ReminderProposalEnvelopeParserError.emptyJSON
         }
@@ -61,16 +110,8 @@ public struct ReminderProposalEnvelopeParser: Sendable {
                 debugDescription: "Expected ISO8601 date string."
             )
         }
-        let dto = try decoder.decode(ReminderProposalDTO.self, from: Data(json.utf8))
-        let proposal = try dto.makeProposal()
-        try proposal.validate()
-
-        let visibleText = String(text[..<startRange.lowerBound])
-            + String(text[endRange.upperBound...])
-        return ReminderProposalParseResult(
-            visibleText: visibleText.trimmingCharacters(in: .whitespacesAndNewlines),
-            proposal: proposal
-        )
+        return try decoder.decode(ReminderProposalDTO.self, from: Data(json.utf8))
+            .makeProposal()
     }
 }
 

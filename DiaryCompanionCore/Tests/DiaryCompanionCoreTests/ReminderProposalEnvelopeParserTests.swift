@@ -14,6 +14,7 @@ import Testing
         visibleText: "先记录下来，稍后再安排。",
         proposal: nil
     ))
+    #expect(result.proposals.isEmpty)
 }
 
 @Test func parsesWeeklyReminderProposalEnvelopeAndRemovesItFromVisibleText() throws {
@@ -44,6 +45,38 @@ import Testing
         notificationEnabled: true,
         calendarEnabled: false
     ))
+    #expect(result.proposals.count == 1)
+}
+
+@Test func parsesMultipleReminderProposalEnvelopesAndRemovesThemFromVisibleText() throws {
+    let breakfast = proposalJSON(
+        title: "Breakfast",
+        notes: "Leave space for breakfast.",
+        recurrence: #"{"kind":"once"}"#,
+        start: #""2026-06-02T08:30:00+08:00""#,
+        duration: 30
+    )
+    let study = proposalJSON(
+        title: "Study information theory",
+        notes: "Finish half of this week's content.",
+        recurrence: #"{"kind":"once"}"#,
+        start: #""2026-06-02T09:30:00+08:00""#,
+        duration: 120
+    )
+    let result = try ReminderProposalEnvelopeParser().parse("""
+    我把明天拆成两个事项：
+    \(reminderProposalEnvelope(study))
+    中间可休息。
+    \(reminderProposalEnvelope(breakfast))
+    请逐项确认。
+    """)
+
+    #expect(result.visibleText == "我把明天拆成两个事项：\n中间可休息。\n请逐项确认。")
+    #expect(result.proposals.map(\.title) == [
+        "Breakfast",
+        "Study information theory",
+    ])
+    #expect(result.proposal?.title == "Breakfast")
 }
 
 @Test func parsesFindFreeTimeReminderWithSearchWindow() throws {
@@ -221,6 +254,7 @@ func parsesSupportedISO8601Dates(start: String) throws {
 @Test(arguments: [
     "[[DIARY_REMINDER_PROPOSAL]]\n{}",
     "{}\n[[/DIARY_REMINDER_PROPOSAL]]",
+    "[[/DIARY_REMINDER_PROPOSAL]]\n{}\n[[DIARY_REMINDER_PROPOSAL]]",
 ])
 func rejectsUnmatchedReminderProposalMarker(text: String) {
     #expect(throws: ReminderProposalEnvelopeParserError.invalidEnvelope) {
@@ -228,11 +262,11 @@ func rejectsUnmatchedReminderProposalMarker(text: String) {
     }
 }
 
-@Test func rejectsMultipleReminderProposalEnvelopes() {
+@Test func rejectsUnclosedSecondReminderProposalEnvelope() {
     let envelope = reminderProposalEnvelope(proposalJSON(recurrence: #"{"kind":"once"}"#))
 
     #expect(throws: ReminderProposalEnvelopeParserError.invalidEnvelope) {
-        try ReminderProposalEnvelopeParser().parse("\(envelope)\n\(envelope)")
+        try ReminderProposalEnvelopeParser().parse("\(envelope)\n[[DIARY_REMINDER_PROPOSAL]]")
     }
 }
 
@@ -298,6 +332,8 @@ private func reminderProposalEnvelope(_ json: String) -> String {
 }
 
 private func proposalJSON(
+    title: String = "Review plan",
+    notes: String = "Prepare notes.",
     recurrence: String,
     schedulingMode: String = "fixed",
     start: String = #""2026-06-01T19:30:00+08:00""#,
@@ -310,8 +346,8 @@ private func proposalJSON(
 ) -> String {
     """
     {
-      "title": "Review plan",
-      "notes": "Prepare notes.",
+      "title": "\(title)",
+      "notes": "\(notes)",
       "start": \(start),
       \(duration.map { #""durationMinutes": \#($0),"# } ?? "")
       "recurrence": \(recurrence),
