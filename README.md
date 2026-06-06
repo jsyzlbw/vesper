@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Natural language in. Editable life actions out.</strong><br>
-  <sub>原生 iPhone 私人助理：把一句话变成可确认、可编辑、可执行的提醒、闹钟、日历和日记。</sub>
+  <sub>原生 iPhone 私人助理：把一句话变成可确认、可编辑、可执行的生活行动。</sub>
 </p>
 
 <p align="center">
@@ -18,24 +18,24 @@
 </p>
 
 <p align="center">
-  <a href="#-简体中文">简体中文</a>
+  <a href="#simplified-chinese">简体中文</a>
   ·
-  <a href="#-english">English</a>
+  <a href="#english">English</a>
   ·
   <a href="https://github.com/jsyzlbw/vesper/releases/latest">Download IPA</a>
   ·
   <a href="docs/vesper-user-guide-zh-Hans.md">User Guide</a>
 </p>
 
-<p align="center">
-  <img src="docs/assets/readme/vesper-hero.png" alt="Vesper turns natural language into editable and auditable iPhone actions." width="100%">
-</p>
+<h2 id="simplified-chinese">简体中文</h2>
 
-## 简体中文
+<p align="center">
+  <img src="docs/assets/readme/vesper-hero-zh.png" alt="Vesper 简体中文产品预览" width="100%">
+</p>
 
 Vesper 是一个原生 iPhone AI companion。你不用学习命令，也不用手工配置复杂自动化；只要像聊天一样说出意图，Vesper 会把它变成清晰的、可编辑的、需要你确认后才执行的行动卡片。
 
-> 例如：`明天 8:30 学深度学习，下午健身，记得留出吃饭时间。`
+> 例如：`明天帮我安排学习和健身，记得留出吃饭时间。`
 
 Vesper 会把“完整计划”拆成多个独立事项，按时间排序，并在你确认后写入通知、真闹钟、日历或日记。AI 负责理解和提案，用户保留最终确认权，App 负责可靠执行。
 
@@ -82,40 +82,48 @@ xcodebuild -project DiaryCompanion.xcodeproj \
 
 Vesper 仍是 development preview。当前重点是把自然语言解析、日历式时间线、TestFlight 内测和真机体验继续打磨到可以稳定给同学测试。
 
-## English
+<p align="right"><a href="#english">Read in English</a></p>
+
+<h2 id="english">English</h2>
+
+<p align="center">
+  <img src="docs/assets/readme/vesper-hero-en.png" alt="Vesper English product preview" width="100%">
+</p>
 
 Vesper is a native iPhone AI companion. You describe intent in natural language; Vesper turns it into explicit, editable, confirmable action cards.
 
-> Example: `Plan tomorrow: deep learning at 8:30, gym in the afternoon, and keep meals open.`
+> Example: `Plan study and gym tomorrow, and keep meals open.`
 
-Vesper splits full-day plans into separate time-sorted items, then creates notifications, real alarms, calendar events, or diary entries only after user confirmation.
+Vesper splits full-day plans into separate time-sorted items, then creates notifications, real alarms, calendar events, or diary entries only after user confirmation. The AI proposes; the user edits and approves; the app executes through native iOS APIs.
 
-### What It Does
+### Understand It In 30 Seconds
 
-| Input | Output |
+| You say | Vesper does |
 | --- | --- |
-| “Remind me to eat in 15 minutes” | Editable reminder card, then a system notification |
-| “Set an alarm for 7 AM tomorrow” | Real AlarmKit alarm on iOS 26+ |
-| “Plan study and gym tomorrow, keep meals open” | Separate time-sorted items with meal/rest buffers |
-| “Turn today into a diary entry” | Local diary entry visible on the timeline |
-| “Review my week every Sunday night” | Weekly review with calendar, activity, and sleep context |
+| “Remind me to eat in 15 minutes” | Builds an editable reminder card, then schedules a system notification |
+| “Set an alarm for 7 AM tomorrow” | Creates a real AlarmKit alarm on iOS 26+ |
+| “Plan study and gym tomorrow, keep meals open” | Splits the day into separate sorted items with meal and rest buffers |
+| “Turn today into a diary entry” | Saves a local diary entry visible from the timeline |
+| “Review my week every Sunday night” | Generates a weekly review with calendar, activity, and sleep context |
 
-### Highlights
+### Why It Is Worth A Star
 
-| Area | Detail |
+| Capability | Value |
 | --- | --- |
-| Conversational workflow | Natural language is the primary interface |
-| Human confirmation | AI proposes; the user edits and confirms |
+| Conversational planning | No command syntax; natural language is the interface |
+| Editable confirmation cards | AI does not silently execute; every action can be reviewed |
 | Native iOS outputs | Notifications, Calendar, HealthKit, and AlarmKit |
-| Local-first storage | Keychain for API keys, SwiftData for records |
+| Local-first storage | Keychain for API keys, SwiftData for local records |
 | Provider flexibility | OpenAI, Anthropic, Gemini, DeepSeek, SiliconFlow, Custom |
-| Debuggability | Export conversations, AI replies, tool calls, and local state |
+| Debuggable by design | Export conversations, AI replies, tool calls, and local state |
 
-### Install
+### Install The Preview
 
-Download the latest development IPA from [GitHub Releases](https://github.com/jsyzlbw/vesper/releases/latest). The current build is development-signed, so the target iPhone must be included in the provisioning profile.
+Download the latest development IPA from [GitHub Releases](https://github.com/jsyzlbw/vesper/releases/latest).
 
-### Build
+The current build is development-signed, so the target iPhone must be included in the provisioning profile before tools such as 3uTools can install it.
+
+### Build Locally
 
 ```bash
 git clone https://github.com/jsyzlbw/vesper.git
