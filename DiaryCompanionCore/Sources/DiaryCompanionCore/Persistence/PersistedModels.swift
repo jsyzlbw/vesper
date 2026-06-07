@@ -434,6 +434,9 @@ import SwiftData
     public var exerciseMinutes: Double
     public var sleepMinutes: Double
     public var sleepInBedMinutes: Double
+    public var workoutSummary: String = ""
+    public var averageHeartRate: Double = 0
+    public var maxHeartRate: Double = 0
     public var sourceDescription: String
     public var updatedAt: Date
 
@@ -445,6 +448,9 @@ import SwiftData
         exerciseMinutes: Double = 0,
         sleepMinutes: Double = 0,
         sleepInBedMinutes: Double = 0,
+        workoutSummary: String = "",
+        averageHeartRate: Double = 0,
+        maxHeartRate: Double = 0,
         sourceDescription: String = "",
         updatedAt: Date = Date()
     ) {
@@ -455,6 +461,9 @@ import SwiftData
         self.exerciseMinutes = exerciseMinutes
         self.sleepMinutes = sleepMinutes
         self.sleepInBedMinutes = sleepInBedMinutes
+        self.workoutSummary = workoutSummary
+        self.averageHeartRate = averageHeartRate
+        self.maxHeartRate = maxHeartRate
         self.sourceDescription = sourceDescription
         self.updatedAt = updatedAt
     }

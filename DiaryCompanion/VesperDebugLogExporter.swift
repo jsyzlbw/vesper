@@ -174,6 +174,9 @@ struct VesperDebugLogExporter {
                     exerciseMinutes: $0.exerciseMinutes,
                     sleepMinutes: $0.sleepMinutes,
                     sleepInBedMinutes: $0.sleepInBedMinutes,
+                    workoutSummary: $0.workoutSummary,
+                    averageHeartRate: $0.averageHeartRate,
+                    maxHeartRate: $0.maxHeartRate,
                     sourceDescription: $0.sourceDescription,
                     updatedAt: $0.updatedAt
                 )
@@ -349,6 +352,9 @@ private struct VesperDebugLogPayload: Encodable {
         let exerciseMinutes: Double
         let sleepMinutes: Double
         let sleepInBedMinutes: Double
+        let workoutSummary: String
+        let averageHeartRate: Double
+        let maxHeartRate: Double
         let sourceDescription: String
         let updatedAt: Date
     }

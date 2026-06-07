@@ -196,6 +196,9 @@ public final class DiaryRepository: ReminderPersistence {
         exerciseMinutes: Double,
         sleepMinutes: Double,
         sleepInBedMinutes: Double,
+        workoutSummary: String = "",
+        averageHeartRate: Double = 0,
+        maxHeartRate: Double = 0,
         sourceDescription: String
     ) throws -> HealthDailySummaryRecord {
         let startOfDay = Calendar.current.startOfDay(for: date)
@@ -211,6 +214,9 @@ public final class DiaryRepository: ReminderPersistence {
             existing.exerciseMinutes = exerciseMinutes
             existing.sleepMinutes = sleepMinutes
             existing.sleepInBedMinutes = sleepInBedMinutes
+            existing.workoutSummary = workoutSummary
+            existing.averageHeartRate = averageHeartRate
+            existing.maxHeartRate = maxHeartRate
             existing.sourceDescription = sourceDescription
             existing.updatedAt = Date()
             try context.save()
@@ -223,6 +229,9 @@ public final class DiaryRepository: ReminderPersistence {
             exerciseMinutes: exerciseMinutes,
             sleepMinutes: sleepMinutes,
             sleepInBedMinutes: sleepInBedMinutes,
+            workoutSummary: workoutSummary,
+            averageHeartRate: averageHeartRate,
+            maxHeartRate: maxHeartRate,
             sourceDescription: sourceDescription
         )
         context.insert(record)

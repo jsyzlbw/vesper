@@ -523,7 +523,7 @@ private struct JournalTimelineCard: View {
             Text(journal.title)
                 .font(.title3.weight(.semibold))
 
-            Text(journal.body)
+            TimelineMarkdownText(journal.body)
                 .font(.body)
                 .foregroundStyle(.primary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -601,6 +601,22 @@ private struct CalendarEventTimelineRow: View {
     }
 }
 
+private struct TimelineMarkdownText: View {
+    let content: String
+
+    init(_ content: String) {
+        self.content = content
+    }
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: content) {
+            Text(attributed)
+        } else {
+            Text(content)
+        }
+    }
+}
+
 private struct HealthTimelineRow: View {
     @Environment(\.vesperLocalization) private var localization
     let summary: HealthDailySummaryRecord
@@ -619,8 +635,14 @@ private struct HealthTimelineRow: View {
                     exerciseMinutes: summary.exerciseMinutes,
                     sleepMinutes: summary.sleepMinutes,
                     sleepInBedMinutes: summary.sleepInBedMinutes,
+                    workoutSummary: summary.workoutSummary,
+                    averageHeartRate: summary.averageHeartRate,
+                    maxHeartRate: summary.maxHeartRate,
                     sourceDescription: summary.sourceDescription
-                ).effectiveSleepMinutes / 60
+                ).effectiveSleepMinutes / 60,
+                workoutSummary: summary.workoutSummary,
+                averageHeartRate: Int(summary.averageHeartRate.rounded()),
+                maxHeartRate: Int(summary.maxHeartRate.rounded())
             ),
             subtitle: summary.sourceDescription.isEmpty
                 ? "HealthKit"

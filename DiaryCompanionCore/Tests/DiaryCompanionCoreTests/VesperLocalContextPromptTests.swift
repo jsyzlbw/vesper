@@ -62,6 +62,38 @@ import Testing
     #expect(prompt.contains("不要编造"))
 }
 
+@Test func localContextPromptIncludesWorkoutProjectsAndHeartRate() {
+    let date = Date(timeIntervalSince1970: 1_780_272_000)
+    let prompt = VesperLocalContextPrompt.instruction(
+        calendarSnapshots: [],
+        healthSnapshots: [
+            VesperHealthSummarySnapshot(
+                date: date,
+                stepCount: 8_888,
+                activeEnergyKilocalories: 720,
+                exerciseMinutes: 63,
+                sleepMinutes: 420,
+                sleepInBedMinutes: 460,
+                workoutSummary: "自由训练 45 分钟；户外步行 18 分钟",
+                averageHeartRate: 132,
+                maxHeartRate: 176,
+                sourceDescription: "HealthKit"
+            ),
+        ],
+        now: date,
+        timeZone: TimeZone(identifier: "Asia/Shanghai")!,
+        calendar: Calendar(identifier: .gregorian),
+        localeIdentifier: "zh_Hans"
+    )
+
+    #expect(prompt.contains("自由训练"))
+    #expect(prompt.contains("户外步行"))
+    #expect(prompt.contains("63 分钟"))
+    #expect(prompt.contains("平均心率 132"))
+    #expect(prompt.contains("最高心率 176"))
+    #expect(prompt.contains("不要只看锻炼分钟是否为 0"))
+}
+
 @Test func localContextPromptHandlesMissingHealthExplicitly() {
     let prompt = VesperLocalContextPrompt.instruction(
         calendarSnapshots: [],

@@ -44,7 +44,7 @@ struct VesperStrings {
     var conversationHistory: String { text("历史对话", "Conversation history") }
     var todayConversation: String { text("今天的对话", "Today's conversation") }
     func emptyConversationDescription(_ title: String) -> String {
-        text(
+        return text(
             "\(title) 还没有消息。每天早上 4 点后，Vesper 会自动开启新的当天对话。",
             "\(title) has no messages yet. Vesper starts a new daily conversation after 4 AM."
         )
@@ -96,7 +96,7 @@ struct VesperStrings {
     var personalRoutine: String { text("个人常规事项", "Personal routine") }
     var personalRoutineNotes: String { text("每天必做与固定习惯", "Daily habits and fixed routines") }
     var personalRoutinePlaceholder: String {
-        text(
+        return text(
             "例如：每天 12:00-13:00 午饭；18:30 晚饭；23:30 后不安排高强度学习；周一三五晚上健身。",
             "Example: lunch 12:00-13:00 daily; dinner at 18:30; avoid intense study after 23:30; gym on Mon/Wed/Fri evenings."
         )
@@ -257,11 +257,23 @@ struct VesperStrings {
         steps: Int,
         energy: Int,
         exerciseMinutes: Int,
-        sleepHours: Double
+        sleepHours: Double,
+        workoutSummary: String = "",
+        averageHeartRate: Int = 0,
+        maxHeartRate: Int = 0
     ) -> String {
-        text(
-            "步数 \(steps)，活动能量 \(energy) 千卡，锻炼记录 \(exerciseMinutes) 分钟，睡眠/卧床约 \(String(format: "%.1f", sleepHours)) 小时",
-            "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min workout record, about \(String(format: "%.1f", sleepHours)) h sleep/in-bed"
+        let workoutText = workoutSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workoutSuffix = workoutText.isEmpty ? "" : "，项目 \(workoutText)"
+        let heartRateSuffix = averageHeartRate > 0 || maxHeartRate > 0
+            ? "，心率 \(averageHeartRate > 0 ? "平均 \(averageHeartRate)" : "")\(averageHeartRate > 0 && maxHeartRate > 0 ? " / " : "")\(maxHeartRate > 0 ? "最高 \(maxHeartRate)" : "") bpm"
+            : ""
+        let englishWorkoutSuffix = workoutText.isEmpty ? "" : ", workouts \(workoutText)"
+        let englishHeartRateSuffix = averageHeartRate > 0 || maxHeartRate > 0
+            ? ", heart rate \(averageHeartRate > 0 ? "avg \(averageHeartRate)" : "")\(averageHeartRate > 0 && maxHeartRate > 0 ? " / " : "")\(maxHeartRate > 0 ? "max \(maxHeartRate)" : "") bpm"
+            : ""
+        return text(
+            "步数 \(steps)，活动能量 \(energy) 千卡，锻炼记录 \(exerciseMinutes) 分钟\(workoutSuffix)\(heartRateSuffix)，睡眠/卧床约 \(String(format: "%.1f", sleepHours)) 小时",
+            "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min workout record\(englishWorkoutSuffix)\(englishHeartRateSuffix), about \(String(format: "%.1f", sleepHours)) h sleep/in-bed"
         )
     }
     func weeklyJournalBody(
@@ -269,11 +281,27 @@ struct VesperStrings {
         stepCount: Int,
         sleepHours: Double,
         averageSleepHours: Double,
-        exerciseMinutes: Int
+        exerciseMinutes: Int,
+        workoutSummary: String = "",
+        averageHeartRate: Int = 0,
+        maxHeartRate: Int = 0
     ) -> String {
-        text(
-            "这一周同步到 \(eventCount) 个日历事项，累计约 \(stepCount) 步，锻炼记录 \(exerciseMinutes) 分钟，睡眠/卧床记录 \(String(format: "%.1f", sleepHours)) 小时，日均约 \(String(format: "%.1f", averageSleepHours)) 小时。\n\n建议：如果日均睡眠/卧床低于 7 小时，下周先把睡前 30 分钟留给低刺激活动；如果锻炼记录少于 150 分钟，可以安排 3 次 20-30 分钟的轻运动；如果日程很多，给自己预留至少一个无安排晚间。你也可以补充本周最重要的进展、遗憾、关系和下周重点。",
-            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, \(exerciseMinutes) workout-record minutes, and \(String(format: "%.1f", sleepHours)) hours of sleep/in-bed data, averaging about \(String(format: "%.1f", averageSleepHours)) hours per day.\n\nSuggestions: if average sleep/in-bed time is below 7 hours, protect the last 30 minutes before bed for low-stimulation time; if workout records are below 150 minutes, schedule 3 light 20-30 minute sessions; if your calendar is crowded, reserve at least one unscheduled evening. You can also add the week's key progress, regrets, relationships, and next week's focus."
+        let workoutText = workoutSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workoutSentence = workoutText.isEmpty
+            ? "本周没有同步到具体运动项目。"
+            : "本周运动项目包括：\(workoutText)。"
+        let heartRateSentence = averageHeartRate > 0 || maxHeartRate > 0
+            ? "心率记录：\(averageHeartRate > 0 ? "平均约 \(averageHeartRate) bpm" : "")\(averageHeartRate > 0 && maxHeartRate > 0 ? "，" : "")\(maxHeartRate > 0 ? "最高约 \(maxHeartRate) bpm" : "")。"
+            : "本周没有同步到心率摘要。"
+        let englishWorkoutSentence = workoutText.isEmpty
+            ? "No specific workout projects were synced this week."
+            : "Workout projects this week: \(workoutText)."
+        let englishHeartRateSentence = averageHeartRate > 0 || maxHeartRate > 0
+            ? "Heart-rate records: \(averageHeartRate > 0 ? "average about \(averageHeartRate) bpm" : "")\(averageHeartRate > 0 && maxHeartRate > 0 ? ", " : "")\(maxHeartRate > 0 ? "max about \(maxHeartRate) bpm" : "")."
+            : "No heart-rate summary was synced this week."
+        return text(
+            "这一周同步到 \(eventCount) 个日历事项，累计约 \(stepCount) 步，锻炼记录 \(exerciseMinutes) 分钟，睡眠/卧床记录 \(String(format: "%.1f", sleepHours)) 小时，日均约 \(String(format: "%.1f", averageSleepHours)) 小时。\n\n\(workoutSentence)\n\(heartRateSentence)\n\n建议：如果日均睡眠/卧床低于 7 小时，下周先把睡前 30 分钟留给低刺激活动；如果锻炼记录少于 150 分钟，可以安排 3 次 20-30 分钟的轻运动；如果心率峰值持续偏高或运动后恢复很慢，下次降低强度并留足拉伸放松；如果日程很多，给自己预留至少一个无安排晚间。你也可以补充本周最重要的进展、遗憾、关系和下周重点。",
+            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, \(exerciseMinutes) workout-record minutes, and \(String(format: "%.1f", sleepHours)) hours of sleep/in-bed data, averaging about \(String(format: "%.1f", averageSleepHours)) hours per day.\n\n\(englishWorkoutSentence)\n\(englishHeartRateSentence)\n\nSuggestions: if average sleep/in-bed time is below 7 hours, protect the last 30 minutes before bed for low-stimulation time; if workout records are below 150 minutes, schedule 3 light 20-30 minute sessions; if peak heart rate stays high or recovery feels slow, lower intensity next time and leave time for cooldown; if your calendar is crowded, reserve at least one unscheduled evening. You can also add the week's key progress, regrets, relationships, and next week's focus."
         )
     }
     func weekdayName(_ weekday: Int) -> String {

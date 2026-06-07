@@ -29,6 +29,9 @@ public struct VesperHealthSummarySnapshot: Equatable, Sendable {
     public var exerciseMinutes: Double
     public var sleepMinutes: Double
     public var sleepInBedMinutes: Double
+    public var workoutSummary: String
+    public var averageHeartRate: Double
+    public var maxHeartRate: Double
     public var sourceDescription: String
 
     public init(
@@ -38,6 +41,9 @@ public struct VesperHealthSummarySnapshot: Equatable, Sendable {
         exerciseMinutes: Double,
         sleepMinutes: Double,
         sleepInBedMinutes: Double,
+        workoutSummary: String = "",
+        averageHeartRate: Double = 0,
+        maxHeartRate: Double = 0,
         sourceDescription: String
     ) {
         self.date = date
@@ -46,6 +52,9 @@ public struct VesperHealthSummarySnapshot: Equatable, Sendable {
         self.exerciseMinutes = exerciseMinutes
         self.sleepMinutes = sleepMinutes
         self.sleepInBedMinutes = sleepInBedMinutes
+        self.workoutSummary = workoutSummary
+        self.averageHeartRate = averageHeartRate
+        self.maxHeartRate = maxHeartRate
         self.sourceDescription = sourceDescription
     }
 
@@ -82,6 +91,7 @@ public enum VesperLocalContextPrompt {
             "不要编造没有出现在上下文里的日历、睡眠、运动或步数；如果上下文缺失，要明确说没有本地记录，而不是假装已经读取。",
             "如果这里已经列出本地摘要，不要声称读取失败；可以说明数据粒度有限。",
             "如果健康数据里睡眠来自“卧床记录估算”，可以用于粗略作息建议，但不要说这是精确 asleep 睡眠。",
+            "分析运动时要综合步数、活动能量、锻炼/体能训练记录、具体项目和心率；不要只看锻炼分钟是否为 0。",
             "",
             "近日/今日日历：",
         ]
@@ -132,7 +142,24 @@ public enum VesperLocalContextPrompt {
         displayCalendar: Calendar
     ) -> String {
         let sleepHours = health.effectiveSleepMinutes / 60
-        return "\(date(health.date, locale: locale, displayCalendar: displayCalendar)) · \(Int(health.stepCount.rounded())) 步 · \(Int(health.activeEnergyKilocalories.rounded())) 千卡活动能量 · \(Int(health.exerciseMinutes.rounded())) 分钟锻炼 · 睡眠约 \(String(format: "%.1f", sleepHours)) 小时（\(health.sleepSourceNote)） · \(health.sourceDescription)"
+        var parts = [
+            "\(date(health.date, locale: locale, displayCalendar: displayCalendar))",
+            "\(Int(health.stepCount.rounded())) 步",
+            "\(Int(health.activeEnergyKilocalories.rounded())) 千卡活动能量",
+            "\(Int(health.exerciseMinutes.rounded())) 分钟锻炼/体能训练记录",
+        ]
+        if !health.workoutSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("项目：\(health.workoutSummary)")
+        }
+        if health.averageHeartRate > 0 {
+            parts.append("平均心率 \(Int(health.averageHeartRate.rounded())) bpm")
+        }
+        if health.maxHeartRate > 0 {
+            parts.append("最高心率 \(Int(health.maxHeartRate.rounded())) bpm")
+        }
+        parts.append("睡眠约 \(String(format: "%.1f", sleepHours)) 小时（\(health.sleepSourceNote)）")
+        parts.append(health.sourceDescription)
+        return parts.joined(separator: " · ")
     }
 
     private static func date(

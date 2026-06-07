@@ -212,6 +212,9 @@ struct JournalAutomationService {
                 exerciseMinutes: summary.exerciseMinutes,
                 sleepMinutes: summary.sleepMinutes,
                 sleepInBedMinutes: summary.sleepInBedMinutes,
+                workoutSummary: summary.workoutSummary,
+                averageHeartRate: summary.averageHeartRate,
+                maxHeartRate: summary.maxHeartRate,
                 sourceDescription: summary.sourceDescription
             )
         }
@@ -357,13 +360,26 @@ struct JournalAutomationService {
             $0 + healthSnapshot($1).effectiveSleepMinutes
         }
         let exerciseMinutes = health.reduce(0) { $0 + $1.exerciseMinutes }
+        let workoutSummary = health
+            .map(\.workoutSummary)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "；")
+        let heartRateDays = health.filter { $0.averageHeartRate > 0 }
+        let averageHeartRate = heartRateDays.isEmpty
+            ? 0
+            : heartRateDays.reduce(0) { $0 + $1.averageHeartRate } / Double(heartRateDays.count)
+        let maxHeartRate = health.map(\.maxHeartRate).max() ?? 0
         let dayCount = max(health.count, 1)
         return localization.strings.weeklyJournalBody(
             eventCount: eventCount,
             stepCount: Int(steps.rounded()),
             sleepHours: sleepMinutes / 60,
             averageSleepHours: sleepMinutes / 60 / Double(dayCount),
-            exerciseMinutes: Int(exerciseMinutes.rounded())
+            exerciseMinutes: Int(exerciseMinutes.rounded()),
+            workoutSummary: workoutSummary,
+            averageHeartRate: Int(averageHeartRate.rounded()),
+            maxHeartRate: Int(maxHeartRate.rounded())
         )
     }
 
@@ -404,7 +420,10 @@ struct JournalAutomationService {
             steps: Int(health.stepCount.rounded()),
             energy: Int(health.activeEnergyKilocalories.rounded()),
             exerciseMinutes: Int(health.exerciseMinutes.rounded()),
-            sleepHours: healthSnapshot(health).effectiveSleepMinutes / 60
+            sleepHours: healthSnapshot(health).effectiveSleepMinutes / 60,
+            workoutSummary: health.workoutSummary,
+            averageHeartRate: Int(health.averageHeartRate.rounded()),
+            maxHeartRate: Int(health.maxHeartRate.rounded())
         )
     }
 
@@ -418,6 +437,9 @@ struct JournalAutomationService {
             exerciseMinutes: health.exerciseMinutes,
             sleepMinutes: health.sleepMinutes,
             sleepInBedMinutes: health.sleepInBedMinutes,
+            workoutSummary: health.workoutSummary,
+            averageHeartRate: health.averageHeartRate,
+            maxHeartRate: health.maxHeartRate,
             sourceDescription: health.sourceDescription
         )
     }
@@ -461,6 +483,9 @@ private struct HealthSummary {
     var exerciseMinutes: Double
     var sleepMinutes: Double
     var sleepInBedMinutes: Double
+    var workoutSummary: String
+    var averageHeartRate: Double
+    var maxHeartRate: Double
     var sourceDescription: String
 }
 
@@ -481,6 +506,10 @@ private struct HealthSummaryReader {
         if let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) {
             readTypes.insert(sleep)
         }
+        readTypes.insert(HKObjectType.workoutType())
+        if let heartRate = HKQuantityType.quantityType(forIdentifier: .heartRate) {
+            readTypes.insert(heartRate)
+        }
         return await withCheckedContinuation { continuation in
             store.requestAuthorization(toShare: [], read: readTypes) { success, _ in
                 continuation.resume(returning: success)
@@ -493,15 +522,19 @@ private struct HealthSummaryReader {
         async let steps = quantitySum(.stepCount, unit: .count(), interval: interval)
         async let energy = quantitySum(.activeEnergyBurned, unit: .kilocalorie(), interval: interval)
         async let exercise = quantitySum(.appleExerciseTime, unit: .minute(), interval: interval)
-        async let workout = workoutMinutes(interval: interval)
+        async let workouts = workoutSummary(interval: interval)
+        async let heartRate = heartRateSummary(interval: interval)
         async let sleep = sleepSummary(interval: interval)
-        let values = await (steps, energy, exercise, workout, sleep)
+        let values = await (steps, energy, exercise, workouts, heartRate, sleep)
         return HealthSummary(
             stepCount: values.0,
             activeEnergyKilocalories: values.1,
-            exerciseMinutes: max(values.2, values.3),
-            sleepMinutes: values.4.asleep,
-            sleepInBedMinutes: values.4.inBed,
+            exerciseMinutes: max(values.2, values.3.minutes),
+            sleepMinutes: values.5.asleep,
+            sleepInBedMinutes: values.5.inBed,
+            workoutSummary: values.3.summary,
+            averageHeartRate: values.4.average,
+            maxHeartRate: values.4.maximum,
             sourceDescription: "HealthKit"
         )
     }
@@ -533,7 +566,7 @@ private struct HealthSummaryReader {
         }
     }
 
-    private func workoutMinutes(interval: DateInterval) async -> Double {
+    private func workoutSummary(interval: DateInterval) async -> (minutes: Double, summary: String) {
         let predicate = HKQuery.predicateForSamples(
             withStart: interval.start,
             end: interval.end,
@@ -547,13 +580,91 @@ private struct HealthSummaryReader {
                 sortDescriptors: nil
             ) { _, samples, _ in
                 let workouts = samples as? [HKWorkout] ?? []
+                let minutes = workouts.reduce(0) { $0 + $1.duration / 60 }
+                let summary = Self.workoutSummaryText(workouts)
+                continuation.resume(returning: (minutes, summary))
+            }
+            store.execute(query)
+        }
+    }
+
+    private func heartRateSummary(interval: DateInterval) async -> (average: Double, maximum: Double) {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
+            return (0, 0)
+        }
+        let predicate = HKQuery.predicateForSamples(
+            withStart: interval.start,
+            end: interval.end,
+            options: .strictStartDate
+        )
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: [.discreteAverage, .discreteMax]
+            ) { _, statistics, _ in
                 continuation.resume(
-                    returning: workouts.reduce(0) {
-                        $0 + $1.duration / 60
-                    }
+                    returning: (
+                        statistics?.averageQuantity()?.doubleValue(for: unit) ?? 0,
+                        statistics?.maximumQuantity()?.doubleValue(for: unit) ?? 0
+                    )
                 )
             }
             store.execute(query)
+        }
+    }
+
+    private static func workoutSummaryText(_ workouts: [HKWorkout]) -> String {
+        let grouped = Dictionary(grouping: workouts, by: \.workoutActivityType)
+        return grouped
+            .map { activityType, workouts in
+                let minutes = workouts.reduce(0) { $0 + $1.duration / 60 }
+                return (
+                    name: workoutName(activityType),
+                    minutes: minutes
+                )
+            }
+            .sorted { $0.minutes > $1.minutes }
+            .prefix(5)
+            .map { "\($0.name) \(Int($0.minutes.rounded())) 分钟" }
+            .joined(separator: "；")
+    }
+
+    private static func workoutName(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .other:
+            return "自由训练"
+        case .walking:
+            return "步行"
+        case .running:
+            return "跑步"
+        case .cycling:
+            return "骑行"
+        case .traditionalStrengthTraining:
+            return "力量训练"
+        case .functionalStrengthTraining:
+            return "功能力量训练"
+        case .yoga:
+            return "瑜伽"
+        case .swimming:
+            return "游泳"
+        case .hiking:
+            return "徒步"
+        case .highIntensityIntervalTraining:
+            return "高强度间歇训练"
+        case .elliptical:
+            return "椭圆机"
+        case .rowing:
+            return "划船"
+        case .stairClimbing:
+            return "爬楼"
+        case .dance:
+            return "舞蹈"
+        case .cooldown:
+            return "放松整理"
+        default:
+            return "运动 \(type.rawValue)"
         }
     }
 

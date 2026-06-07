@@ -474,6 +474,9 @@ struct ChatView: View {
                     exerciseMinutes: $0.exerciseMinutes,
                     sleepMinutes: $0.sleepMinutes,
                     sleepInBedMinutes: $0.sleepInBedMinutes,
+                    workoutSummary: $0.workoutSummary,
+                    averageHeartRate: $0.averageHeartRate,
+                    maxHeartRate: $0.maxHeartRate,
                     sourceDescription: $0.sourceDescription
                 )
             }
@@ -647,7 +650,7 @@ private struct ChatBubble: View {
             if isUser {
                 Spacer(minLength: 48)
             }
-            Text(message.content)
+            ChatMarkdownText(message.content)
                 .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -667,6 +670,22 @@ private struct ChatBubble: View {
 
     private var isUser: Bool {
         message.role == ChatRole.user.rawValue
+    }
+}
+
+private struct ChatMarkdownText: View {
+    let content: String
+
+    init(_ content: String) {
+        self.content = content
+    }
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: content) {
+            Text(attributed)
+        } else {
+            Text(content)
+        }
     }
 }
 
