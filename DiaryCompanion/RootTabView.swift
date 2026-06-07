@@ -612,7 +612,15 @@ private struct HealthTimelineRow: View {
                 steps: Int(summary.stepCount.rounded()),
                 energy: Int(summary.activeEnergyKilocalories.rounded()),
                 exerciseMinutes: Int(summary.exerciseMinutes.rounded()),
-                sleepHours: summary.sleepMinutes / 60
+                sleepHours: VesperHealthSummarySnapshot(
+                    date: summary.date,
+                    stepCount: summary.stepCount,
+                    activeEnergyKilocalories: summary.activeEnergyKilocalories,
+                    exerciseMinutes: summary.exerciseMinutes,
+                    sleepMinutes: summary.sleepMinutes,
+                    sleepInBedMinutes: summary.sleepInBedMinutes,
+                    sourceDescription: summary.sourceDescription
+                ).effectiveSleepMinutes / 60
             ),
             subtitle: summary.sourceDescription.isEmpty
                 ? "HealthKit"

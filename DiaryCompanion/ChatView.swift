@@ -422,7 +422,8 @@ struct ChatView: View {
     }
 
     private func chatMessages(from records: [MessageRecord]) throws -> [ChatMessage] {
-        let routineNotes = (try? DiaryRepository(context: modelContext)
+        let diaryRepository = DiaryRepository(context: modelContext)
+        let routineNotes = (try? diaryRepository
             .journalSettings().personalRoutineNotes) ?? ""
         var result = [
             ChatMessage(
@@ -440,6 +441,7 @@ struct ChatView: View {
                     timeZone: .current
                 ))
                 \(ReminderAssistantPrompt.personalRoutineInstruction(routineNotes))
+                \(localContextInstruction(repository: diaryRepository))
                 """
             ),
         ]
@@ -450,6 +452,38 @@ struct ChatView: View {
             result.append(ChatMessage(role: role, content: record.content))
         }
         return result
+    }
+
+    private func localContextInstruction(repository: DiaryRepository) -> String {
+        let calendarSnapshots = ((try? repository.fetchCalendarEventSnapshots()) ?? [])
+            .map {
+                VesperCalendarEventSnapshot(
+                    title: $0.title,
+                    startDate: $0.startDate,
+                    endDate: $0.endDate,
+                    calendarTitle: $0.calendarTitle,
+                    isAllDay: $0.isAllDay
+                )
+            }
+        let healthSnapshots = ((try? repository.fetchHealthDailySummaries()) ?? [])
+            .map {
+                VesperHealthSummarySnapshot(
+                    date: $0.date,
+                    stepCount: $0.stepCount,
+                    activeEnergyKilocalories: $0.activeEnergyKilocalories,
+                    exerciseMinutes: $0.exerciseMinutes,
+                    sleepMinutes: $0.sleepMinutes,
+                    sleepInBedMinutes: $0.sleepInBedMinutes,
+                    sourceDescription: $0.sourceDescription
+                )
+            }
+        return VesperLocalContextPrompt.instruction(
+            calendarSnapshots: calendarSnapshots,
+            healthSnapshots: healthSnapshots,
+            now: Date(),
+            timeZone: .current,
+            localeIdentifier: localization.locale.identifier
+        )
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {

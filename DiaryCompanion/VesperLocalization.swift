@@ -260,8 +260,8 @@ struct VesperStrings {
         sleepHours: Double
     ) -> String {
         text(
-            "步数 \(steps)，活动能量 \(energy) 千卡，锻炼 \(exerciseMinutes) 分钟，睡眠 \(String(format: "%.1f", sleepHours)) 小时",
-            "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min exercise, \(String(format: "%.1f", sleepHours)) h sleep"
+            "步数 \(steps)，活动能量 \(energy) 千卡，锻炼记录 \(exerciseMinutes) 分钟，睡眠/卧床约 \(String(format: "%.1f", sleepHours)) 小时",
+            "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min workout record, about \(String(format: "%.1f", sleepHours)) h sleep/in-bed"
         )
     }
     func weeklyJournalBody(
@@ -272,8 +272,8 @@ struct VesperStrings {
         exerciseMinutes: Int
     ) -> String {
         text(
-            "这一周共同步 \(eventCount) 个日历事项，累计约 \(stepCount) 步，锻炼 \(exerciseMinutes) 分钟，记录睡眠 \(String(format: "%.1f", sleepHours)) 小时，日均 \(String(format: "%.1f", averageSleepHours)) 小时。\n\n建议：如果日均睡眠低于 7 小时，下周先把睡前 30 分钟留给低刺激活动；如果锻炼少于 150 分钟，可以安排 3 次 20-30 分钟的轻运动；如果日程很多，给自己预留至少一个无安排晚间。你也可以补充本周最重要的进展、遗憾、关系和下周重点。",
-            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, \(exerciseMinutes) exercise minutes, and \(String(format: "%.1f", sleepHours)) hours of sleep, averaging \(String(format: "%.1f", averageSleepHours)) hours per day.\n\nSuggestions: if average sleep is below 7 hours, protect the last 30 minutes before bed for low-stimulation time; if exercise is below 150 minutes, schedule 3 light 20-30 minute sessions; if your calendar is crowded, reserve at least one unscheduled evening. You can also add the week's key progress, regrets, relationships, and next week's focus."
+            "这一周同步到 \(eventCount) 个日历事项，累计约 \(stepCount) 步，锻炼记录 \(exerciseMinutes) 分钟，睡眠/卧床记录 \(String(format: "%.1f", sleepHours)) 小时，日均约 \(String(format: "%.1f", averageSleepHours)) 小时。\n\n建议：如果日均睡眠/卧床低于 7 小时，下周先把睡前 30 分钟留给低刺激活动；如果锻炼记录少于 150 分钟，可以安排 3 次 20-30 分钟的轻运动；如果日程很多，给自己预留至少一个无安排晚间。你也可以补充本周最重要的进展、遗憾、关系和下周重点。",
+            "This week Vesper synced \(eventCount) calendar events, about \(stepCount) steps, \(exerciseMinutes) workout-record minutes, and \(String(format: "%.1f", sleepHours)) hours of sleep/in-bed data, averaging about \(String(format: "%.1f", averageSleepHours)) hours per day.\n\nSuggestions: if average sleep/in-bed time is below 7 hours, protect the last 30 minutes before bed for low-stimulation time; if workout records are below 150 minutes, schedule 3 light 20-30 minute sessions; if your calendar is crowded, reserve at least one unscheduled evening. You can also add the week's key progress, regrets, relationships, and next week's focus."
         )
     }
     func weekdayName(_ weekday: Int) -> String {

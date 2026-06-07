@@ -353,7 +353,9 @@ struct JournalAutomationService {
         let health = ((try? repository.fetchHealthDailySummaries()) ?? [])
             .filter { $0.date >= start && $0.date < end }
         let steps = health.reduce(0) { $0 + $1.stepCount }
-        let sleepMinutes = health.reduce(0) { $0 + $1.sleepMinutes }
+        let sleepMinutes = health.reduce(0) {
+            $0 + healthSnapshot($1).effectiveSleepMinutes
+        }
         let exerciseMinutes = health.reduce(0) { $0 + $1.exerciseMinutes }
         let dayCount = max(health.count, 1)
         return localization.strings.weeklyJournalBody(
@@ -402,7 +404,21 @@ struct JournalAutomationService {
             steps: Int(health.stepCount.rounded()),
             energy: Int(health.activeEnergyKilocalories.rounded()),
             exerciseMinutes: Int(health.exerciseMinutes.rounded()),
-            sleepHours: health.sleepMinutes / 60
+            sleepHours: healthSnapshot(health).effectiveSleepMinutes / 60
+        )
+    }
+
+    private func healthSnapshot(
+        _ health: HealthDailySummaryRecord
+    ) -> VesperHealthSummarySnapshot {
+        VesperHealthSummarySnapshot(
+            date: health.date,
+            stepCount: health.stepCount,
+            activeEnergyKilocalories: health.activeEnergyKilocalories,
+            exerciseMinutes: health.exerciseMinutes,
+            sleepMinutes: health.sleepMinutes,
+            sleepInBedMinutes: health.sleepInBedMinutes,
+            sourceDescription: health.sourceDescription
         )
     }
 
@@ -477,14 +493,15 @@ private struct HealthSummaryReader {
         async let steps = quantitySum(.stepCount, unit: .count(), interval: interval)
         async let energy = quantitySum(.activeEnergyBurned, unit: .kilocalorie(), interval: interval)
         async let exercise = quantitySum(.appleExerciseTime, unit: .minute(), interval: interval)
+        async let workout = workoutMinutes(interval: interval)
         async let sleep = sleepSummary(interval: interval)
-        let values = await (steps, energy, exercise, sleep)
+        let values = await (steps, energy, exercise, workout, sleep)
         return HealthSummary(
             stepCount: values.0,
             activeEnergyKilocalories: values.1,
-            exerciseMinutes: values.2,
-            sleepMinutes: values.3.asleep,
-            sleepInBedMinutes: values.3.inBed,
+            exerciseMinutes: max(values.2, values.3),
+            sleepMinutes: values.4.asleep,
+            sleepInBedMinutes: values.4.inBed,
             sourceDescription: "HealthKit"
         )
     }
@@ -510,6 +527,30 @@ private struct HealthSummaryReader {
             ) { _, statistics, _ in
                 continuation.resume(
                     returning: statistics?.sumQuantity()?.doubleValue(for: unit) ?? 0
+                )
+            }
+            store.execute(query)
+        }
+    }
+
+    private func workoutMinutes(interval: DateInterval) async -> Double {
+        let predicate = HKQuery.predicateForSamples(
+            withStart: interval.start,
+            end: interval.end,
+            options: .strictStartDate
+        )
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKObjectType.workoutType(),
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: nil
+            ) { _, samples, _ in
+                let workouts = samples as? [HKWorkout] ?? []
+                continuation.resume(
+                    returning: workouts.reduce(0) {
+                        $0 + $1.duration / 60
+                    }
                 )
             }
             store.execute(query)
