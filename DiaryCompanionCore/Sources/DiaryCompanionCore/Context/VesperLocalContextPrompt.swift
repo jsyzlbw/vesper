@@ -71,6 +71,17 @@ public struct VesperHealthSummarySnapshot: Equatable, Sendable {
         }
         return "没有睡眠记录"
     }
+
+    public var hasUsableHealthSignals: Bool {
+        stepCount > 0
+            || activeEnergyKilocalories > 0
+            || exerciseMinutes > 0
+            || sleepMinutes > 0
+            || sleepInBedMinutes > 0
+            || !workoutSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || averageHeartRate > 0
+            || maxHeartRate > 0
+    }
 }
 
 public enum VesperLocalContextPrompt {
@@ -110,10 +121,15 @@ public enum VesperLocalContextPrompt {
         lines.append("")
         lines.append("最近健康摘要：")
         let recentHealth = healthSnapshots
+            .filter(\.hasUsableHealthSignals)
             .sorted { $0.date > $1.date }
             .prefix(7)
         if recentHealth.isEmpty {
-            lines.append("- 最近没有本地 Health 摘要；不要编造睡眠、运动或步数。")
+            if healthSnapshots.isEmpty {
+                lines.append("- 最近没有本地 Health 摘要；不要编造睡眠、运动或步数。")
+            } else {
+                lines.append("- 最近没有可用的本地 Health 指标；可能尚未授权、设备没有同步，或 HealthKit 返回空样本。不要把这些空样本解读为用户没有运动或没有睡觉。")
+            }
         } else {
             lines.append(contentsOf: recentHealth.map {
                 "- \(healthLine($0, locale: locale, displayCalendar: scopedCalendar))"

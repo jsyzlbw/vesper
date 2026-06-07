@@ -34,18 +34,6 @@ struct JournalAutomationService {
 
     private func schedulePrompts(settings: JournalSettingsRecord) async {
         let center = UNUserNotificationCenter.current()
-        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
-        guard granted else {
-            return
-        }
-        center.removePendingNotificationRequests(
-            withIdentifiers: [
-                Self.morningNotificationIdentifier,
-                Self.eveningNotificationIdentifier,
-                Self.weeklyNotificationIdentifier,
-            ]
-        )
-
         var requests: [UNNotificationRequest] = []
         if settings.isMorningPromptEnabled {
             requests.append(
@@ -81,6 +69,29 @@ struct JournalAutomationService {
                 )
             )
         }
+
+        guard !requests.isEmpty else {
+            center.removePendingNotificationRequests(
+                withIdentifiers: [
+                    Self.morningNotificationIdentifier,
+                    Self.eveningNotificationIdentifier,
+                    Self.weeklyNotificationIdentifier,
+                ]
+            )
+            return
+        }
+
+        let granted = (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        guard granted else {
+            return
+        }
+        center.removePendingNotificationRequests(
+            withIdentifiers: [
+                Self.morningNotificationIdentifier,
+                Self.eveningNotificationIdentifier,
+                Self.weeklyNotificationIdentifier,
+            ]
+        )
 
         for request in requests {
             try? await center.add(request)
@@ -355,9 +366,10 @@ struct JournalAutomationService {
         let eventCount = events.filter { $0.startDate >= start && $0.startDate < end }.count
         let health = ((try? repository.fetchHealthDailySummaries()) ?? [])
             .filter { $0.date >= start && $0.date < end }
+            .filter { $0.hasUsableHealthSignals }
         let steps = health.reduce(0) { $0 + $1.stepCount }
         let sleepMinutes = health.reduce(0) {
-            $0 + healthSnapshot($1).effectiveSleepMinutes
+            $0 + $1.vesperSnapshot.effectiveSleepMinutes
         }
         let exerciseMinutes = health.reduce(0) { $0 + $1.exerciseMinutes }
         let workoutSummary = health
@@ -397,7 +409,7 @@ struct JournalAutomationService {
         date: Date
     ) -> HealthDailySummaryRecord? {
         ((try? repository.fetchHealthDailySummaries()) ?? [])
-            .first { Calendar.current.isDate($0.date, inSameDayAs: date) }
+            .first { Calendar.current.isDate($0.date, inSameDayAs: date) && $0.hasUsableHealthSignals }
     }
 
     private func eventLine(_ event: CalendarEventSnapshotRecord) -> String {
@@ -420,27 +432,10 @@ struct JournalAutomationService {
             steps: Int(health.stepCount.rounded()),
             energy: Int(health.activeEnergyKilocalories.rounded()),
             exerciseMinutes: Int(health.exerciseMinutes.rounded()),
-            sleepHours: healthSnapshot(health).effectiveSleepMinutes / 60,
+            sleepHours: health.vesperSnapshot.effectiveSleepMinutes / 60,
             workoutSummary: health.workoutSummary,
             averageHeartRate: Int(health.averageHeartRate.rounded()),
             maxHeartRate: Int(health.maxHeartRate.rounded())
-        )
-    }
-
-    private func healthSnapshot(
-        _ health: HealthDailySummaryRecord
-    ) -> VesperHealthSummarySnapshot {
-        VesperHealthSummarySnapshot(
-            date: health.date,
-            stepCount: health.stepCount,
-            activeEnergyKilocalories: health.activeEnergyKilocalories,
-            exerciseMinutes: health.exerciseMinutes,
-            sleepMinutes: health.sleepMinutes,
-            sleepInBedMinutes: health.sleepInBedMinutes,
-            workoutSummary: health.workoutSummary,
-            averageHeartRate: health.averageHeartRate,
-            maxHeartRate: health.maxHeartRate,
-            sourceDescription: health.sourceDescription
         )
     }
 
@@ -717,10 +712,6 @@ private struct JournalEscalationAlarmScheduler {
     private let manager = AlarmManager.shared
 
     func refresh(settings: JournalSettingsRecord) async {
-        guard ((try? await manager.requestAuthorization()) == .authorized) else {
-            return
-        }
-
         let identifiers = allCandidateIdentifiers(settings: settings)
         remove(ids: identifiers)
 
@@ -748,6 +739,14 @@ private struct JournalEscalationAlarmScheduler {
                     delayMinutes: settings.escalationDelayMinutes
                 )
             )
+        }
+
+        guard !alarms.isEmpty else {
+            return
+        }
+
+        guard ((try? await manager.requestAuthorization()) == .authorized) else {
+            return
         }
 
         for alarm in alarms {

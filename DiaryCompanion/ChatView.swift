@@ -466,20 +466,7 @@ struct ChatView: View {
                 )
             }
         let healthSnapshots = ((try? repository.fetchHealthDailySummaries()) ?? [])
-            .map {
-                VesperHealthSummarySnapshot(
-                    date: $0.date,
-                    stepCount: $0.stepCount,
-                    activeEnergyKilocalories: $0.activeEnergyKilocalories,
-                    exerciseMinutes: $0.exerciseMinutes,
-                    sleepMinutes: $0.sleepMinutes,
-                    sleepInBedMinutes: $0.sleepInBedMinutes,
-                    workoutSummary: $0.workoutSummary,
-                    averageHeartRate: $0.averageHeartRate,
-                    maxHeartRate: $0.maxHeartRate,
-                    sourceDescription: $0.sourceDescription
-                )
-            }
+            .map { $0.vesperSnapshot }
         return VesperLocalContextPrompt.instruction(
             calendarSnapshots: calendarSnapshots,
             healthSnapshots: healthSnapshots,

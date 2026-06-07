@@ -13,6 +13,27 @@ struct VesperLocalizationContext {
     }
 }
 
+extension HealthDailySummaryRecord {
+    var vesperSnapshot: VesperHealthSummarySnapshot {
+        VesperHealthSummarySnapshot(
+            date: date,
+            stepCount: stepCount,
+            activeEnergyKilocalories: activeEnergyKilocalories,
+            exerciseMinutes: exerciseMinutes,
+            sleepMinutes: sleepMinutes,
+            sleepInBedMinutes: sleepInBedMinutes,
+            workoutSummary: workoutSummary,
+            averageHeartRate: averageHeartRate,
+            maxHeartRate: maxHeartRate,
+            sourceDescription: sourceDescription
+        )
+    }
+
+    var hasUsableHealthSignals: Bool {
+        vesperSnapshot.hasUsableHealthSignals
+    }
+}
+
 private struct VesperLocalizationContextKey: EnvironmentKey {
     static let defaultValue = VesperLocalizationContext(language: .english)
 }
@@ -135,8 +156,8 @@ struct VesperStrings {
     var importHealthData: String { text("读取运动与睡眠", "Import activity and sleep") }
     var journalAutomationFooter: String {
         text(
-            "Vesper 会用本地通知主动发起对话，并在 App 打开或回到前台时同步日历、运动和睡眠数据。",
-            "Vesper uses local notifications to start the conversation, then syncs calendar, activity, and sleep data when the app opens or returns to foreground."
+            "Vesper 会用本地通知主动发起对话。日历和 Health 只会在对应开关开启后同步；Health 数据只保存在本机，用于日记和周记。",
+            "Vesper uses local notifications to start the conversation. Calendar and Health sync only after their toggles are enabled; Health data stays on device for journals and weekly reviews."
         )
     }
 
@@ -226,6 +247,7 @@ struct VesperStrings {
 
     var remindersAndAlarms: String { text("提醒与闹钟", "Reminders & alarms") }
     var timelineCalendar: String { text("时间线日历", "Timeline calendar") }
+    var dayOverview: String { text("当天总览", "Day overview") }
     var noRecordsForSelectedDate: String { text("这一天暂无记录", "No records on this day") }
     var diaryAndTasks: String { text("日记与任务", "Diaries & tasks") }
     var summaries: String { text("总结", "Summaries") }
@@ -240,7 +262,7 @@ struct VesperStrings {
     var todayScheduleHeader: String { text("今日安排", "Today's schedule") }
     var healthSnapshotHeader: String { text("健康快照", "Health snapshot") }
     var noCalendarEventsToday: String { text("今天还没有日历事项。", "No calendar events today.") }
-    var noHealthDataYet: String { text("还没有读取到 Health 数据。", "No Health data yet.") }
+    var noHealthDataYet: String { text("暂无可用健康数据", "No usable Health data") }
     var eveningReviewPrompt: String { text("今晚可以从这几件事开始：今天完成了什么、有什么情绪波动、明天最该推进什么。", "Start with what you finished, what shifted emotionally, and what matters most tomorrow.") }
     var untitledCalendarEvent: String { text("未命名日程", "Untitled event") }
     var allDay: String { text("全天", "All-day") }
@@ -274,6 +296,18 @@ struct VesperStrings {
         return text(
             "步数 \(steps)，活动能量 \(energy) 千卡，锻炼记录 \(exerciseMinutes) 分钟\(workoutSuffix)\(heartRateSuffix)，睡眠/卧床约 \(String(format: "%.1f", sleepHours)) 小时",
             "\(steps) steps, \(energy) kcal active energy, \(exerciseMinutes) min workout record\(englishWorkoutSuffix)\(englishHeartRateSuffix), about \(String(format: "%.1f", sleepHours)) h sleep/in-bed"
+        )
+    }
+    func exerciseSleepOverview(exerciseMinutes: Int, sleepHours: Double) -> String {
+        text(
+            "\(exerciseMinutes) 分钟运动 · \(String(format: "%.1f", sleepHours)) 小时睡眠",
+            "\(exerciseMinutes) min exercise · \(String(format: "%.1f", sleepHours)) h sleep"
+        )
+    }
+    func stepsSleepOverview(steps: Int, sleepHours: Double) -> String {
+        text(
+            "\(steps) 步 · \(String(format: "%.1f", sleepHours)) 小时睡眠",
+            "\(steps) steps · \(String(format: "%.1f", sleepHours)) h sleep"
         )
     }
     func weeklyJournalBody(

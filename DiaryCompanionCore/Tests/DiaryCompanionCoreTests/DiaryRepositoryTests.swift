@@ -33,3 +33,19 @@ import Testing
     #expect(parameters["provider"] == "openai")
     #expect(parameters["apiKey"] == "<redacted>")
 }
+
+@MainActor
+@Test func defaultJournalSettingsDelayHealthImportUntilUserEnablesIt() throws {
+    let container = try DiaryModelContainerFactory.make(inMemory: true)
+    let repository = DiaryRepository(context: container.mainContext)
+
+    let settings = try repository.journalSettings()
+
+    #expect(settings.isCalendarImportEnabled == false)
+    #expect(settings.isMorningPromptEnabled == false)
+    #expect(settings.isEveningPromptEnabled == false)
+    #expect(settings.isMorningEscalationAlarmEnabled == false)
+    #expect(settings.isEveningEscalationAlarmEnabled == false)
+    #expect(settings.isWeeklySummaryEnabled == false)
+    #expect(settings.isHealthImportEnabled == false)
+}

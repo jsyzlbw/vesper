@@ -95,7 +95,7 @@ private struct TimelineView: View {
            summaries.isEmpty,
            journals.isEmpty,
            calendarEvents.isEmpty,
-           healthSummaries.isEmpty {
+           usableHealthSummaries.isEmpty {
             ContentUnavailableView(
                 localization.strings.noTimelineRecords,
                 systemImage: "clock.arrow.circlepath",
@@ -112,6 +112,16 @@ private struct TimelineView: View {
                     .datePickerStyle(.graphical)
                     .labelsHidden()
                 }
+
+                DayOverviewCard(
+                    date: selectedDate,
+                    eventCount: dayCalendarEvents.count,
+                    reminderCount: dayReminders.count,
+                    journalCount: dayJournals.count + dayEntries.count + dayTasks.count + daySummaries.count,
+                    healthSummary: dayHealthSummaries.first
+                )
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 10, trailing: 16))
+                .listRowBackground(Color.clear)
 
                 if dayReminders.isEmpty,
                    dayEntries.isEmpty,
@@ -268,7 +278,13 @@ private struct TimelineView: View {
     }
 
     private var dayHealthSummaries: [HealthDailySummaryRecord] {
-        healthSummaries.filter { isSelectedDay($0.date) }
+        usableHealthSummaries.filter {
+            isSelectedDay($0.date) && $0.hasUsableHealthSignals
+        }
+    }
+
+    private var usableHealthSummaries: [HealthDailySummaryRecord] {
+        healthSummaries.filter { $0.hasUsableHealthSignals }
     }
 
     private var errorBinding: Binding<Bool> {
@@ -628,18 +644,7 @@ private struct HealthTimelineRow: View {
                 steps: Int(summary.stepCount.rounded()),
                 energy: Int(summary.activeEnergyKilocalories.rounded()),
                 exerciseMinutes: Int(summary.exerciseMinutes.rounded()),
-                sleepHours: VesperHealthSummarySnapshot(
-                    date: summary.date,
-                    stepCount: summary.stepCount,
-                    activeEnergyKilocalories: summary.activeEnergyKilocalories,
-                    exerciseMinutes: summary.exerciseMinutes,
-                    sleepMinutes: summary.sleepMinutes,
-                    sleepInBedMinutes: summary.sleepInBedMinutes,
-                    workoutSummary: summary.workoutSummary,
-                    averageHeartRate: summary.averageHeartRate,
-                    maxHeartRate: summary.maxHeartRate,
-                    sourceDescription: summary.sourceDescription
-                ).effectiveSleepMinutes / 60,
+                sleepHours: summary.vesperSnapshot.effectiveSleepMinutes / 60,
                 workoutSummary: summary.workoutSummary,
                 averageHeartRate: Int(summary.averageHeartRate.rounded()),
                 maxHeartRate: Int(summary.maxHeartRate.rounded())
@@ -673,6 +678,124 @@ private struct TimelineTextRow: View {
         }
         .padding(.vertical, 3)
         .textSelection(.enabled)
+    }
+}
+
+private struct DayOverviewCard: View {
+    @Environment(\.vesperLocalization) private var localization
+    let date: Date
+    let eventCount: Int
+    let reminderCount: Int
+    let journalCount: Int
+    let healthSummary: HealthDailySummaryRecord?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localization.strings.dayOverview)
+                        .font(.headline)
+                    Text(date.formatted(
+                        Date.FormatStyle(date: .complete, time: .omitted)
+                            .locale(localization.locale)
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "calendar.day.timeline.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+            ], spacing: 10) {
+                DayOverviewMetric(
+                    title: localization.strings.calendarEvents,
+                    value: "\(eventCount)",
+                    systemImage: "calendar"
+                )
+                DayOverviewMetric(
+                    title: localization.strings.remindersAndAlarms,
+                    value: "\(reminderCount)",
+                    systemImage: "bell"
+                )
+                DayOverviewMetric(
+                    title: localization.strings.diaryAndTasks,
+                    value: "\(journalCount)",
+                    systemImage: "book.closed"
+                )
+                DayOverviewMetric(
+                    title: localization.strings.healthSnapshotHeader,
+                    value: healthValue,
+                    systemImage: "heart.text.square"
+                )
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(0.14),
+                    Color(.secondarySystemGroupedBackground),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var healthValue: String {
+        guard let healthSummary else {
+            return localization.strings.noHealthDataYet
+        }
+        let snapshot = healthSummary.vesperSnapshot
+        let exercise = Int(healthSummary.exerciseMinutes.rounded())
+        let sleep = snapshot.effectiveSleepMinutes / 60
+        if exercise > 0 {
+            return localization.strings.exerciseSleepOverview(
+                exerciseMinutes: exercise,
+                sleepHours: sleep
+            )
+        }
+        return localization.strings.stepsSleepOverview(
+            steps: Int(healthSummary.stepCount.rounded()),
+            sleepHours: sleep
+        )
+    }
+}
+
+private struct DayOverviewMetric: View {
+    let title: String
+    let value: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Text(value)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemBackground).opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

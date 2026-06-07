@@ -19,6 +19,53 @@ import Testing
     #expect(snapshot.sleepSourceNote.contains("asleep"))
 }
 
+@Test func healthSnapshotWithAllZeroMetricsIsTreatedAsUnavailable() {
+    let snapshot = VesperHealthSummarySnapshot(
+        date: Date(timeIntervalSince1970: 1_780_272_000),
+        stepCount: 0,
+        activeEnergyKilocalories: 0,
+        exerciseMinutes: 0,
+        sleepMinutes: 0,
+        sleepInBedMinutes: 0,
+        workoutSummary: "",
+        averageHeartRate: 0,
+        maxHeartRate: 0,
+        sourceDescription: "HealthKit"
+    )
+
+    #expect(snapshot.hasUsableHealthSignals == false)
+}
+
+@Test func healthSnapshotWithWorkoutOrHeartRateIsTreatedAsAvailable() {
+    let workoutSnapshot = VesperHealthSummarySnapshot(
+        date: Date(timeIntervalSince1970: 1_780_272_000),
+        stepCount: 0,
+        activeEnergyKilocalories: 0,
+        exerciseMinutes: 45,
+        sleepMinutes: 0,
+        sleepInBedMinutes: 0,
+        workoutSummary: "自由训练 45 分钟",
+        averageHeartRate: 0,
+        maxHeartRate: 0,
+        sourceDescription: "HealthKit"
+    )
+    let heartRateSnapshot = VesperHealthSummarySnapshot(
+        date: Date(timeIntervalSince1970: 1_780_272_000),
+        stepCount: 0,
+        activeEnergyKilocalories: 0,
+        exerciseMinutes: 0,
+        sleepMinutes: 0,
+        sleepInBedMinutes: 0,
+        workoutSummary: "",
+        averageHeartRate: 118,
+        maxHeartRate: 166,
+        sourceDescription: "HealthKit"
+    )
+
+    #expect(workoutSnapshot.hasUsableHealthSignals)
+    #expect(heartRateSnapshot.hasUsableHealthSignals)
+}
+
 @Test func localContextPromptIncludesCalendarHealthAndCaveats() {
     let timeZone = TimeZone(identifier: "Asia/Shanghai")!
     let calendar = Calendar(identifier: .gregorian)
@@ -60,6 +107,31 @@ import Testing
     #expect(prompt.contains("卧床记录估算"))
     #expect(prompt.contains("不要声称读取失败"))
     #expect(prompt.contains("不要编造"))
+}
+
+@Test func localContextPromptDoesNotTreatAllZeroHealthSnapshotsAsRealActivity() {
+    let date = Date(timeIntervalSince1970: 1_780_272_000)
+    let prompt = VesperLocalContextPrompt.instruction(
+        calendarSnapshots: [],
+        healthSnapshots: [
+            VesperHealthSummarySnapshot(
+                date: date,
+                stepCount: 0,
+                activeEnergyKilocalories: 0,
+                exerciseMinutes: 0,
+                sleepMinutes: 0,
+                sleepInBedMinutes: 0,
+                sourceDescription: "HealthKit"
+            ),
+        ],
+        now: date,
+        timeZone: TimeZone(identifier: "Asia/Shanghai")!,
+        calendar: Calendar(identifier: .gregorian),
+        localeIdentifier: "zh_Hans"
+    )
+
+    #expect(prompt.contains("最近没有可用的本地 Health 指标"))
+    #expect(!prompt.contains("0 步，0 千卡活动能量，0 分钟"))
 }
 
 @Test func localContextPromptIncludesWorkoutProjectsAndHeartRate() {

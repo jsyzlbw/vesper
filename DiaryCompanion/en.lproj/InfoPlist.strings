@@ -1,3 +1,4 @@
 "NSCalendarsFullAccessUsageDescription" = "Read existing schedules and create reminder events after you confirm.";
 "NSCalendarsWriteOnlyAccessUsageDescription" = "Add reminders to your system calendar after you confirm.";
 "NSAlarmKitUsageDescription" = "Schedule alarms only after you confirm.";
+"NSHealthShareUsageDescription" = "Read steps, active energy, workouts, heart rate, and sleep to create local journal and weekly review insights.";
