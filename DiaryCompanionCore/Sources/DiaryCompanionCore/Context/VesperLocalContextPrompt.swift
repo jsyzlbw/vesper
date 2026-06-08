@@ -107,9 +107,18 @@ public enum VesperLocalContextPrompt {
             "近日/今日日历：",
         ]
 
+        let calendarWindowStart = scopedCalendar.startOfDay(for: now)
+        let calendarWindowEnd = scopedCalendar.date(
+            byAdding: .day,
+            value: 21,
+            to: calendarWindowStart
+        ) ?? now.addingTimeInterval(21 * 24 * 60 * 60)
         let nearbyEvents = calendarSnapshots
+            .filter {
+                $0.endDate >= calendarWindowStart && $0.startDate < calendarWindowEnd
+            }
             .sorted { $0.startDate < $1.startDate }
-            .prefix(12)
+            .prefix(18)
         if nearbyEvents.isEmpty {
             lines.append("- 没有本地日历摘要。")
         } else {

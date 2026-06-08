@@ -188,6 +188,22 @@ public final class DiaryRepository: ReminderPersistence {
         return try context.fetch(descriptor)
     }
 
+    public func deleteCalendarEventSnapshots(
+        from startDate: Date,
+        to endDate: Date,
+        excludingEventIdentifiers eventIdentifiers: Set<String>
+    ) throws {
+        var descriptor = FetchDescriptor<CalendarEventSnapshotRecord>()
+        descriptor.sortBy = [SortDescriptor(\.startDate)]
+        let records = try context.fetch(descriptor)
+        for record in records where record.startDate >= startDate
+            && record.startDate < endDate
+            && !eventIdentifiers.contains(record.eventIdentifier) {
+            context.delete(record)
+        }
+        try context.save()
+    }
+
     @discardableResult
     public func upsertHealthDailySummary(
         date: Date,

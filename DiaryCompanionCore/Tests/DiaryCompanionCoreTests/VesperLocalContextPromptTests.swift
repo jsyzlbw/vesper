@@ -109,6 +109,42 @@ import Testing
     #expect(prompt.contains("不要编造"))
 }
 
+@Test func localContextPromptPrioritizesUpcomingCalendarEventsOverStalePastSnapshots() {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+    let now = calendar.date(from: DateComponents(year: 2026, month: 6, day: 8, hour: 9))!
+    let future = calendar.date(from: DateComponents(year: 2026, month: 6, day: 22, hour: 8, minute: 30))!
+    let stalePastSnapshots = (1...14).map { index in
+        VesperCalendarEventSnapshot(
+            title: "旧测试事件 \(index)",
+            startDate: calendar.date(byAdding: .day, value: -index, to: now)!,
+            endDate: calendar.date(byAdding: .day, value: -index, to: now)!.addingTimeInterval(1_800),
+            calendarTitle: "Old",
+            isAllDay: false
+        )
+    }
+
+    let prompt = VesperLocalContextPrompt.instruction(
+        calendarSnapshots: stalePastSnapshots + [
+            VesperCalendarEventSnapshot(
+                title: "MAT3350 - Introduction to Information Theory",
+                startDate: future,
+                endDate: future.addingTimeInterval(6_600),
+                calendarTitle: "Daily",
+                isAllDay: false
+            ),
+        ],
+        healthSnapshots: [],
+        now: now,
+        timeZone: calendar.timeZone,
+        calendar: calendar,
+        localeIdentifier: "zh_Hans"
+    )
+
+    #expect(prompt.contains("MAT3350"))
+    #expect(!prompt.contains("旧测试事件"))
+}
+
 @Test func localContextPromptDoesNotTreatAllZeroHealthSnapshotsAsRealActivity() {
     let date = Date(timeIntervalSince1970: 1_780_272_000)
     let prompt = VesperLocalContextPrompt.instruction(

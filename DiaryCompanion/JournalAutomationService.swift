@@ -181,10 +181,12 @@ struct JournalAutomationService {
             calendars: eventStore.calendars(for: .event)
         )
         let events = eventStore.events(matching: predicate)
+        var seenEventIdentifiers = Set<String>()
         for event in events {
             guard let identifier = event.eventIdentifier else {
                 continue
             }
+            seenEventIdentifiers.insert(identifier)
             _ = try? repository.upsertCalendarEventSnapshot(
                 eventIdentifier: identifier,
                 externalIdentifier: event.calendarItemExternalIdentifier,
@@ -196,6 +198,11 @@ struct JournalAutomationService {
                 isAllDay: event.isAllDay
             )
         }
+        try? repository.deleteCalendarEventSnapshots(
+            from: start,
+            to: end,
+            excludingEventIdentifiers: seenEventIdentifiers
+        )
     }
 
     private func importHealthSummaries(repository: DiaryRepository) async {
